@@ -8,6 +8,10 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
+      - name: Disable CRLF conversion (must run before checkout)
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - name: Checkout this repo (bridge_core + patch)
         uses: actions/checkout@v4
 
@@ -24,7 +28,10 @@ jobs:
         shell: bash
         run: |
           cd hdtSMP64
-          git apply --whitespace=nowarn -p1 ../patch/settle_bridge_guard_layoutsafe.patch
+          if ! git apply --whitespace=nowarn -p1 ../patch/settle_bridge_guard_layoutsafe.patch; then
+            echo "Strict apply failed; retrying while ignoring line-ending differences"
+            git apply --ignore-whitespace --whitespace=nowarn -p1 ../patch/settle_bridge_guard_layoutsafe.patch
+          fi
           git status --short
 
       - name: Cache vcpkg binaries
