@@ -147,10 +147,16 @@ index d2dad2a..d8bb01a 100644
      "minCullingDistance": 500.0,
      "autoAdjustMaxSkeletons": true,
 diff --git a/src/ActorManager.cpp b/src/ActorManager.cpp
-index 1c874bd..f9c5ce6 100644
+index 1c874bd..37c5504 100644
 --- a/src/ActorManager.cpp
 +++ b/src/ActorManager.cpp
-@@ -115,6 +115,53 @@ namespace hdt
+@@ -1,4 +1,5 @@
+ 
++#include <cstddef>
+ #include "ActorManager.h"
+ #include "WeatherManager.h"
+ #include "dhdtOverrideManager.h"
+@@ -115,8 +116,59 @@ namespace hdt
  		return findNode(skeleton, shouldFix ? "NPC Root [Root]" : "NPC");
  	}
  
@@ -203,22 +209,30 @@ index 1c874bd..f9c5ce6 100644
 +
  	ActorManager::ActorManager()
  	{
++		// SMPFixes.dll mirrors these layouts by hand. Do not change them without a matching SMPFixes build.
++		static_assert(sizeof(PhysicsItem) == 0x70, "hdt::ActorManager::PhysicsItem changed size: SMPFixes will misread headParts/armors");
++		static_assert(offsetof(PhysicsItem, m_physics) == 0x60, "hdt::ActorManager::PhysicsItem::m_physics moved");
++		static_assert(sizeof(Head::HeadPart) == 0xC8, "hdt::ActorManager::Head::HeadPart changed size: SMPFixes iterates it with stride 0xC8");
  	}
-@@ -671,6 +718,7 @@ namespace hdt
+ 
+ 	ActorManager::~ActorManager()
+@@ -671,6 +723,8 @@ namespace hdt
  		}
  		m_physics = nullptr;
  		m_hasDynamicPhysics = false;
-+		m_claim.reset();
++		ExternalOwnerRegistry::instance().drop(m_claimHandle);
++		m_claimHandle = 0;
  	}
  
  	ActorManager::ItemState ActorManager::PhysicsItem::state() const
-@@ -698,6 +746,28 @@ namespace hdt
+@@ -698,6 +752,29 @@ namespace hdt
  			m_physics->m_windFactor = a_windFactor;
  	}
  
 +	RE::BSTSmartPointer<SkyrimSystem> ActorManager::PhysicsItem::createSystem(MeshKind kind, RE::NiNode* skeleton, RE::NiAVObject* model, std::unordered_map<RE::BSFixedString, RE::BSFixedString>&& renameMap, SkyrimSystem* oldSystem)
 +	{
-+		m_claim.reset();
++		ExternalOwnerRegistry::instance().drop(m_claimHandle);
++		m_claimHandle = 0;
 +
 +		if (physicsFile.first.empty()) {
 +			return nullptr;
@@ -230,7 +244,7 @@ index 1c874bd..f9c5ce6 100644
 +			ExternalClaim claim = ExternalOwnerRegistry::instance().tryClaim(context, ref ? ref->GetFormID() : 0);
 +			if (claim.active()) {
 +				logger::info("External mesh owner {} took over physics file {}.", claim.ownerName(), physicsFile.first.c_str());
-+				m_claim = std::make_shared<ExternalClaim>(std::move(claim));
++				m_claimHandle = ExternalOwnerRegistry::instance().hold(std::move(claim));
 +				return nullptr;
 +			}
 +		}
@@ -241,7 +255,7 @@ index 1c874bd..f9c5ce6 100644
  	std::vector<ActorManager::Skeleton>& ActorManager::getSkeletons()
  	{
  		return m_skeletons;
-@@ -952,7 +1022,7 @@ namespace hdt
+@@ -952,7 +1029,7 @@ namespace hdt
  		if (!isFirstPersonSkeleton(skeleton.get())) {
  			// FIXME we probably could simplify this by using findNode as surely we don't attach Armors to lurkers skeleton?
  			auto renameMap = armor.renameMap;
@@ -250,7 +264,7 @@ index 1c874bd..f9c5ce6 100644
  			if (system) {
  				armor.setPhysics(system, isActive);
  				hasPhysics = true;
-@@ -1225,7 +1295,7 @@ namespace hdt
+@@ -1225,7 +1302,7 @@ namespace hdt
  			i.clearPhysics();
  			if (!isFirstPersonSkeleton(skeleton.get())) {
  				auto renameMap = i.renameMap;
@@ -259,7 +273,7 @@ index 1c874bd..f9c5ce6 100644
  				if (system) {
  					i.setPhysics(system, isActive);
  					hasPhysics = true;
-@@ -1238,7 +1308,7 @@ namespace hdt
+@@ -1238,7 +1315,7 @@ namespace hdt
  	// Reload meshes without entirely wiping their physics
  	void ActorManager::Skeleton::softReloadMeshes()
  	{
@@ -268,7 +282,7 @@ index 1c874bd..f9c5ce6 100644
  			RE::BSTSmartPointer<SkyrimSystem> oldSystem = item.m_physics;
  			item.clearPhysics();
  
-@@ -1247,7 +1317,7 @@ namespace hdt
+@@ -1247,7 +1324,7 @@ namespace hdt
  			}
  
  			auto renameMap = renameMapSrc;
@@ -277,7 +291,7 @@ index 1c874bd..f9c5ce6 100644
  
  			if (system) {
  				system->block_resetting = true;
-@@ -1262,7 +1332,7 @@ namespace hdt
+@@ -1262,7 +1339,7 @@ namespace hdt
  		};
  
  		for (auto& armor : armors) {
@@ -286,7 +300,7 @@ index 1c874bd..f9c5ce6 100644
  		}
  
  		if (isFirstPersonSkeleton(skeleton.get()) || !head.headNode) {
-@@ -1283,7 +1353,7 @@ namespace hdt
+@@ -1283,7 +1360,7 @@ namespace hdt
  				continue;
  			}
  
@@ -295,7 +309,7 @@ index 1c874bd..f9c5ce6 100644
  		}
  	}
  
-@@ -1325,7 +1395,7 @@ namespace hdt
+@@ -1325,7 +1402,7 @@ namespace hdt
  			logger::debug("Try create system for headpart {} physics file {}.", headPart.headPart->name, headPart.physicsFile.first.c_str());
  			physicsDupes.insert(headPart.physicsFile.first);
  			auto renameMap = this->head.renameMap;
@@ -305,7 +319,7 @@ index 1c874bd..f9c5ce6 100644
  				logger::debug("Success.");
  				headPart.setPhysics(system, isActive);
 diff --git a/src/ActorManager.h b/src/ActorManager.h
-index cc3c59e..d434433 100644
+index cc3c59e..ee52c19 100644
 --- a/src/ActorManager.h
 +++ b/src/ActorManager.h
 @@ -4,6 +4,7 @@
@@ -316,7 +330,7 @@ index cc3c59e..d434433 100644
  #include "hdtSkyrimSystem.h"
  
  namespace hdt
-@@ -62,7 +63,14 @@ namespace hdt
+@@ -62,8 +63,18 @@ namespace hdt
  			// a_windFactor is a percentage [0,1] with 0 being no wind effect to 1 being full wind effect.
  			void setWindFactor(float a_windFactor);
  
@@ -325,12 +339,16 @@ index cc3c59e..d434433 100644
 +			RE::BSTSmartPointer<SkyrimSystem> createSystem(MeshKind kind, RE::NiNode* skeleton, RE::NiAVObject* model, std::unordered_map<RE::BSFixedString, RE::BSFixedString>&& renameMap, SkyrimSystem* oldSystem);
 +
  			RE::BSTSmartPointer<SkyrimSystem> m_physics;
-+			// Shared so copies of an item (vector growth, console snapshots) do not release the claim early;
-+			// the last copy does.
-+			std::shared_ptr<ExternalClaim> m_claim;
  			bool m_hasDynamicPhysics = false;
++			// Handle into ExternalOwnerRegistry (0 = no claim). It lives in the 4 bytes of tail padding after
++			// m_hasDynamicPhysics so sizeof(PhysicsItem) stays 0x70. SMPFixes.dll (closed source) walks
++			// Head::headParts / Skeleton::armors with hardcoded strides and offsets; growing this struct shifts
++			// every element after the first and crashes it in SMPFixes::ProcessDirtyActors.
++			// Copies of an item share the handle; the first clearPhysics()/createSystem() drops it, later drops are no-ops.
++			std::uint32_t m_claimHandle = 0;
  		};
  
+ 		struct Head
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index 67d3c7d..03fd695 100644
 --- a/src/CMakeLists.txt
@@ -414,10 +432,10 @@ index 67d3c7d..03fd695 100644
  # there; the rest of our /W4 /WX build stays strict. /utf-8 makes MSVC read this file's narrow string literals (the
 diff --git a/src/ExternalOwner.cpp b/src/ExternalOwner.cpp
 new file mode 100644
-index 0000000..2738122
+index 0000000..b00b7ad
 --- /dev/null
 +++ b/src/ExternalOwner.cpp
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,247 @@
 +#include "ExternalOwner.h"
 +
 +#include <algorithm>
@@ -582,6 +600,41 @@ index 0000000..2738122
 +		return ExternalClaim();
 +	}
 +
++	std::uint32_t ExternalOwnerRegistry::hold(ExternalClaim&& claim)
++	{
++		if (!claim.active()) {
++			return 0;
++		}
++
++		std::lock_guard<std::mutex> lock(m_mutex);
++		std::uint32_t handle = m_nextHandle++;
++		if (handle == 0) {
++			handle = m_nextHandle++;
++		}
++		m_held.emplace(handle, std::move(claim));
++		return handle;
++	}
++
++	void ExternalOwnerRegistry::drop(std::uint32_t handle)
++	{
++		if (handle == 0) {
++			return;
++		}
++
++		// Move the claim out under the lock and let it release after the lock is gone: release() locks m_mutex
++		// and calls owner code.
++		ExternalClaim doomed;
++		{
++			std::lock_guard<std::mutex> lock(m_mutex);
++			const auto found = m_held.find(handle);
++			if (found == m_held.end()) {
++				return;
++			}
++			doomed = std::move(found->second);
++			m_held.erase(found);
++		}
++	}
++
 +	void ExternalOwnerRegistry::release(IMeshOwner* owner, std::uint64_t token)
 +	{
 +		if (!owner) {
@@ -632,10 +685,10 @@ index 0000000..2738122
 +}
 diff --git a/src/ExternalOwner.h b/src/ExternalOwner.h
 new file mode 100644
-index 0000000..60921e3
+index 0000000..181336c
 --- /dev/null
 +++ b/src/ExternalOwner.h
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,131 @@
 +#pragma once
 +
 +#include "PluginOwnerAPI.h"
@@ -645,6 +698,7 @@ index 0000000..60921e3
 +#include <mutex>
 +#include <optional>
 +#include <string>
++#include <unordered_map>
 +#include <utility>
 +#include <vector>
 +
@@ -707,6 +761,11 @@ index 0000000..60921e3
 +		// Calls owner->release only while the token is a live claim of that owner.
 +		void release(IMeshOwner* owner, std::uint64_t token);
 +
++		// Keeps a claim alive on behalf of a PhysicsItem without growing it. Returns a non-zero handle, or 0 for an
++		// inactive claim. Handles are never reused. drop() releases the claim and is a no-op for 0 or unknown handles.
++		std::uint32_t hold(ExternalClaim&& claim);
++		void drop(std::uint32_t handle);
++
 +		struct Relinquished
 +		{
 +			std::uint32_t actorFormId = 0;
@@ -757,6 +816,8 @@ index 0000000..60921e3
 +		std::vector<Skip> m_skips;
 +		std::vector<std::uint32_t> m_reloading;
 +		std::atomic<std::uint64_t> m_nextToken{ 1 };
++		std::unordered_map<std::uint32_t, ExternalClaim> m_held;
++		std::uint32_t m_nextHandle = 1;
 +	};
 +}
 diff --git a/src/GTContactBridgeProducer.cpp b/src/GTContactBridgeProducer.cpp
