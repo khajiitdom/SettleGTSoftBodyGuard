@@ -1,0 +1,3247 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b208900..c2f5234 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
+ 
+ project(
+ 	hdtsmp64
+-	VERSION 3.0.0
++	VERSION 4.1.1
+ 	LANGUAGES CXX)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ 
+@@ -47,6 +47,11 @@ option(BUILD_PATTERN_TESTS "Build the SMP XML pattern expander doctest suite" OF
+ # mirroring tests/patterns.
+ option(BUILD_CONFIG_TESTS "Build the GlobalConfig JSON doctest suite" OFF)
+ 
++# Standalone doctest suite for the external mesh owner registry. OFF by default and never packaged; it compiles
++# src/ExternalOwner.cpp directly without the game's PCH and links only doctest (no CommonLibSSE/Bullet/TBB), mirroring
++# tests/config.
++option(BUILD_OWNER_TESTS "Build the external mesh owner doctest suite" OFF)
++
+ # default definitions
+ add_definitions(-DBT_USE_SSE_IN_API)
+ 
+@@ -54,7 +59,9 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+ 
+ add_subdirectory(src)
+ 
+-if(BUILD_CONFIG_TESTS OR BUILD_VALIDATOR_TESTS)
++if(BUILD_CONFIG_TESTS
++   OR BUILD_VALIDATOR_TESTS
++   OR BUILD_OWNER_TESTS)
+ 	enable_testing()
+ endif()
+ if(BUILD_CONFIG_TESTS)
+@@ -63,6 +70,9 @@ endif()
+ if(BUILD_VALIDATOR_TESTS)
+ 	add_subdirectory(tests/validator)
+ endif()
++if(BUILD_OWNER_TESTS)
++	add_subdirectory(tests/owner)
++endif()
+ 
+ if(BUILD_PATTERN_TESTS)
+ 	add_subdirectory(tests/patterns) # tests/patterns/CMakeLists.txt owns enable_testing()
+diff --git a/configs/configs.json b/configs/configs.json
+index 8aaac87..ae904b8 100644
+--- a/configs/configs.json
++++ b/configs/configs.json
+@@ -8,6 +8,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 500.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/configs/configsPresets/Debug.json b/configs/configsPresets/Debug.json
+index 3210926..3f0f121 100644
+--- a/configs/configsPresets/Debug.json
++++ b/configs/configsPresets/Debug.json
+@@ -7,6 +7,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 300.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/configs/configsPresets/Default.json b/configs/configsPresets/Default.json
+index 24e337d..c986309 100644
+--- a/configs/configsPresets/Default.json
++++ b/configs/configsPresets/Default.json
+@@ -7,6 +7,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 500.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/configs/configsPresets/Performance.json b/configs/configsPresets/Performance.json
+index d78607e..0a0f6d4 100644
+--- a/configs/configsPresets/Performance.json
++++ b/configs/configsPresets/Performance.json
+@@ -7,6 +7,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 300.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/configs/configsPresets/Quality.json b/configs/configsPresets/Quality.json
+index faa3894..fee4a54 100644
+--- a/configs/configsPresets/Quality.json
++++ b/configs/configsPresets/Quality.json
+@@ -7,6 +7,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 500.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/configs/configsPresets/Reasonable.json b/configs/configsPresets/Reasonable.json
+index d2dad2a..d8bb01a 100644
+--- a/configs/configsPresets/Reasonable.json
++++ b/configs/configsPresets/Reasonable.json
+@@ -7,6 +7,12 @@
+     "rotationSpeedLimit": 10.0,
+     "unclampedResets": true,
+     "unclampedResetAngle": 130.0,
++    "guardDiscontinuities": true,
++    "teleportSpeedLimit": 1500.0,
++    "teleportTurnLimit": 2000.0,
++    "poseSnapSpeedLimit": 1200.0,
++    "settleSpeedLimit": 100.0,
++    "settleTimeLimit": 1.5,
+     "useRealTime": true,
+     "minCullingDistance": 500.0,
+     "autoAdjustMaxSkeletons": true,
+diff --git a/src/ActorManager.cpp b/src/ActorManager.cpp
+index 1c874bd..f9c5ce6 100644
+--- a/src/ActorManager.cpp
++++ b/src/ActorManager.cpp
+@@ -115,6 +115,53 @@ namespace hdt
+ 		return findNode(skeleton, shouldFix ? "NPC Root [Root]" : "NPC");
+ 	}
+ 
++	namespace
++	{
++		class SkyrimMeshClaimContext : public IMeshClaimContext
++		{
++		public:
++			SkyrimMeshClaimContext(MeshKind a_kind, RE::NiNode* a_skeleton, RE::NiAVObject* a_model, const char* a_physicsFile, const std::unordered_map<RE::BSFixedString, RE::BSFixedString>& a_renameMap) :
++				m_kind(a_kind),
++				m_skeleton(a_skeleton),
++				m_model(a_model),
++				m_physicsFile(a_physicsFile),
++				m_renameMap(a_renameMap)
++			{}
++
++			virtual MeshKind getKind() const override { return m_kind; }
++			virtual const char* getPhysicsFile() const override { return m_physicsFile; }
++			virtual RE::NiNode* getSkeleton() const override { return m_skeleton; }
++			virtual RE::NiAVObject* getModel() const override { return m_model; }
++
++			virtual RE::Actor* getActor() const override
++			{
++				if (!m_skeleton) {
++					return nullptr;
++				}
++
++				RE::TESObjectREFR* owner = m_skeleton->GetUserData();
++				return owner ? owner->As<RE::Actor>() : nullptr;
++			}
++
++			virtual const char* getMergedBoneName(const char* a_originalName) const override
++			{
++				if (!a_originalName) {
++					return nullptr;
++				}
++
++				const auto iter = m_renameMap.find(RE::BSFixedString(a_originalName));
++				return iter != m_renameMap.end() ? iter->second.c_str() : nullptr;
++			}
++
++		private:
++			MeshKind m_kind;
++			RE::NiNode* m_skeleton;
++			RE::NiAVObject* m_model;
++			const char* m_physicsFile;
++			const std::unordered_map<RE::BSFixedString, RE::BSFixedString>& m_renameMap;
++		};
++	}
++
+ 	ActorManager::ActorManager()
+ 	{
+ 	}
+@@ -671,6 +718,7 @@ namespace hdt
+ 		}
+ 		m_physics = nullptr;
+ 		m_hasDynamicPhysics = false;
++		m_claim.reset();
+ 	}
+ 
+ 	ActorManager::ItemState ActorManager::PhysicsItem::state() const
+@@ -698,6 +746,28 @@ namespace hdt
+ 			m_physics->m_windFactor = a_windFactor;
+ 	}
+ 
++	RE::BSTSmartPointer<SkyrimSystem> ActorManager::PhysicsItem::createSystem(MeshKind kind, RE::NiNode* skeleton, RE::NiAVObject* model, std::unordered_map<RE::BSFixedString, RE::BSFixedString>&& renameMap, SkyrimSystem* oldSystem)
++	{
++		m_claim.reset();
++
++		if (physicsFile.first.empty()) {
++			return nullptr;
++		}
++
++		if (skeleton) {
++			const SkyrimMeshClaimContext context(kind, skeleton, model, physicsFile.first.c_str(), renameMap);
++			const auto* ref = skeleton->GetUserData();
++			ExternalClaim claim = ExternalOwnerRegistry::instance().tryClaim(context, ref ? ref->GetFormID() : 0);
++			if (claim.active()) {
++				logger::info("External mesh owner {} took over physics file {}.", claim.ownerName(), physicsFile.first.c_str());
++				m_claim = std::make_shared<ExternalClaim>(std::move(claim));
++				return nullptr;
++			}
++		}
++
++		return SkyrimSystemCreator().createOrUpdateSystem(skeleton, model, &physicsFile, std::move(renameMap), oldSystem);
++	}
++
+ 	std::vector<ActorManager::Skeleton>& ActorManager::getSkeletons()
+ 	{
+ 		return m_skeletons;
+@@ -952,7 +1022,7 @@ namespace hdt
+ 		if (!isFirstPersonSkeleton(skeleton.get())) {
+ 			// FIXME we probably could simplify this by using findNode as surely we don't attach Armors to lurkers skeleton?
+ 			auto renameMap = armor.renameMap;
+-			auto system = SkyrimSystemCreator().createOrUpdateSystem(getNpcNode(skeleton.get()), attachedNode, &armor.physicsFile, std::move(renameMap), nullptr);
++			auto system = armor.createSystem(MeshKind::Armor, getNpcNode(skeleton.get()), attachedNode, std::move(renameMap), nullptr);
+ 			if (system) {
+ 				armor.setPhysics(system, isActive);
+ 				hasPhysics = true;
+@@ -1225,7 +1295,7 @@ namespace hdt
+ 			i.clearPhysics();
+ 			if (!isFirstPersonSkeleton(skeleton.get())) {
+ 				auto renameMap = i.renameMap;
+-				auto system = SkyrimSystemCreator().createOrUpdateSystem(npc.get(), i.armorWorn.get(), &i.physicsFile, std::move(renameMap), nullptr);
++				auto system = i.createSystem(MeshKind::Armor, npc.get(), i.armorWorn.get(), std::move(renameMap), nullptr);
+ 				if (system) {
+ 					i.setPhysics(system, isActive);
+ 					hasPhysics = true;
+@@ -1238,7 +1308,7 @@ namespace hdt
+ 	// Reload meshes without entirely wiping their physics
+ 	void ActorManager::Skeleton::softReloadMeshes()
+ 	{
+-		auto reloadPhysicsItem = [&](auto& item, RE::NiAVObject* model, const auto& renameMapSrc, bool itemActive) {
++		auto reloadPhysicsItem = [&](auto& item, RE::NiAVObject* model, const auto& renameMapSrc, bool itemActive, MeshKind kind) {
+ 			RE::BSTSmartPointer<SkyrimSystem> oldSystem = item.m_physics;
+ 			item.clearPhysics();
+ 
+@@ -1247,7 +1317,7 @@ namespace hdt
+ 			}
+ 
+ 			auto renameMap = renameMapSrc;
+-			auto system = SkyrimSystemCreator().createOrUpdateSystem(npc.get(), model, &item.physicsFile, std::move(renameMap), nullptr);
++			auto system = item.createSystem(kind, npc.get(), model, std::move(renameMap), nullptr);
+ 
+ 			if (system) {
+ 				system->block_resetting = true;
+@@ -1262,7 +1332,7 @@ namespace hdt
+ 		};
+ 
+ 		for (auto& armor : armors) {
+-			reloadPhysicsItem(armor, armor.armorWorn.get(), armor.renameMap, isActive);
++			reloadPhysicsItem(armor, armor.armorWorn.get(), armor.renameMap, isActive, MeshKind::Armor);
+ 		}
+ 
+ 		if (isFirstPersonSkeleton(skeleton.get()) || !head.headNode) {
+@@ -1283,7 +1353,7 @@ namespace hdt
+ 				continue;
+ 			}
+ 
+-			reloadPhysicsItem(headPart, head.headNode.get(), head.renameMap, isActive && head.isActive);
++			reloadPhysicsItem(headPart, head.headNode.get(), head.renameMap, isActive && head.isActive, MeshKind::HeadPart);
+ 		}
+ 	}
+ 
+@@ -1325,7 +1395,7 @@ namespace hdt
+ 			logger::debug("Try create system for headpart {} physics file {}.", headPart.headPart->name, headPart.physicsFile.first.c_str());
+ 			physicsDupes.insert(headPart.physicsFile.first);
+ 			auto renameMap = this->head.renameMap;
+-			auto system = SkyrimSystemCreator().createOrUpdateSystem(npc.get(), this->head.headNode.get(), &headPart.physicsFile, std::move(renameMap), nullptr);
++			auto system = headPart.createSystem(MeshKind::HeadPart, npc.get(), this->head.headNode.get(), std::move(renameMap), nullptr);
+ 			if (system) {
+ 				logger::debug("Success.");
+ 				headPart.setPhysics(system, isActive);
+diff --git a/src/ActorManager.h b/src/ActorManager.h
+index cc3c59e..d434433 100644
+--- a/src/ActorManager.h
++++ b/src/ActorManager.h
+@@ -4,6 +4,7 @@
+ 
+ #include "DynamicHDT.h"
+ #include "Events.h"
++#include "ExternalOwner.h"
+ #include "hdtSkyrimSystem.h"
+ 
+ namespace hdt
+@@ -62,7 +63,14 @@ namespace hdt
+ 			// a_windFactor is a percentage [0,1] with 0 being no wind effect to 1 being full wind effect.
+ 			void setWindFactor(float a_windFactor);
+ 
++			// @brief Asks the registered mesh owners whether one of them takes over simulation of this item.
++			// @return Null when an owner claimed the mesh, so no system is created for it, or when creation failed.
++			RE::BSTSmartPointer<SkyrimSystem> createSystem(MeshKind kind, RE::NiNode* skeleton, RE::NiAVObject* model, std::unordered_map<RE::BSFixedString, RE::BSFixedString>&& renameMap, SkyrimSystem* oldSystem);
++
+ 			RE::BSTSmartPointer<SkyrimSystem> m_physics;
++			// Shared so copies of an item (vector growth, console snapshots) do not release the claim early;
++			// the last copy does.
++			std::shared_ptr<ExternalClaim> m_claim;
+ 			bool m_hasDynamicPhysics = false;
+ 		};
+ 
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 67d3c7d..03fd695 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -4,6 +4,16 @@ add_compile_definitions(_SILENCE_AMP_DEPRECATION_WARNINGS NOMINMAX)
+ 
+ set(SOURCE_DIR "${ROOT_DIR}/src")
+ 
++set(GT_CONTACT_BRIDGE_CORE_DIR "${ROOT_DIR}/../bridge_core")
++if(NOT EXISTS "${GT_CONTACT_BRIDGE_CORE_DIR}/include/GTContactBridgeABI.h" OR
++   NOT EXISTS "${GT_CONTACT_BRIDGE_CORE_DIR}/src/GTContactFrameCollector.cpp")
++	message(FATAL_ERROR "Phase 2 GT contact bridge core is missing: ${GT_CONTACT_BRIDGE_CORE_DIR}")
++endif()
++set(GT_CONTACT_BRIDGE_CORE_FILES
++	"${GT_CONTACT_BRIDGE_CORE_DIR}/include/GTContactBridgeABI.h"
++	"${GT_CONTACT_BRIDGE_CORE_DIR}/include/GTContactFrameCollector.h"
++	"${GT_CONTACT_BRIDGE_CORE_DIR}/src/GTContactFrameCollector.cpp")
++
+ set(SOURCE_FILES
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtAABB.h"
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtBone.h"
+@@ -34,6 +44,9 @@ set(SOURCE_FILES
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtStiffSpringConstraint.cpp"
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtStiffSpringConstraint.h"
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtVertex.cpp"
++	"${SOURCE_DIR}/GTContactBridgeProducer.cpp"
++	"${SOURCE_DIR}/GTContactBridgeProducer.h"
++	"${SOURCE_DIR}/GTContactFrameTiming.h"
+ 	"${SOURCE_DIR}/hdtSkinnedMesh/hdtVertex.h"
+ 	"${SOURCE_DIR}/Events.h"
+ 	"${SOURCE_DIR}/Events.cpp"
+@@ -62,8 +75,11 @@ set(SOURCE_FILES
+ 	"${SOURCE_DIR}/hdtSerialization.cpp"
+ 	"${SOURCE_DIR}/hdtSerialization.h"
+ 	"${SOURCE_DIR}/PluginAPI.h"
++	"${SOURCE_DIR}/PluginOwnerAPI.h"
+ 	"${SOURCE_DIR}/PluginInterfaceImpl.cpp"
+ 	"${SOURCE_DIR}/PluginInterfaceImpl.h"
++	"${SOURCE_DIR}/ExternalOwner.cpp"
++	"${SOURCE_DIR}/ExternalOwner.h"
+ 	"${SOURCE_DIR}/DynamicHDT.cpp"
+ 	"${SOURCE_DIR}/DynamicHDT.h"
+ 	"${SOURCE_DIR}/WeatherManager.cpp"
+@@ -83,6 +99,8 @@ set(SOURCE_FILES
+ 	"${SOURCE_DIR}/hdtWorldCollider.h"
+ 	"${SOURCE_DIR}/WorldCollisionAPI.h"
+ 	"${SOURCE_DIR}/hdtSkyrimBody.h"
++	"${SOURCE_DIR}/hdtDiscontinuityGuard.cpp"
++	"${SOURCE_DIR}/hdtDiscontinuityGuard.h"
+ 	"${SOURCE_DIR}/hdtSkyrimBone.cpp"
+ 	"${SOURCE_DIR}/hdtSkyrimBone.h"
+ 	"${SOURCE_DIR}/hdtConvertNi.cpp"
+@@ -143,6 +161,7 @@ set(SOURCE_FILES
+ 	"${SOURCE_DIR}/main.cpp"
+ 	"${SOURCE_DIR}/PCH.h")
+ source_group(TREE "${ROOT_DIR}" FILES ${SOURCE_FILES})
++source_group("Phase 2 Contact Bridge Core" FILES ${GT_CONTACT_BRIDGE_CORE_FILES})
+ 
+ set(VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/Plugin.h")
+ 
+@@ -181,7 +200,7 @@ if(NOT DETOURS_LIBRARY_DEBUG)
+ 	set(DETOURS_LIBRARY_DEBUG ${DETOURS_LIBRARY_RELEASE})
+ endif()
+ 
+-add_library("${PROJECT_NAME}" SHARED ${SOURCE_FILES} "${VERSION_HEADER}" "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
++add_library("${PROJECT_NAME}" SHARED ${SOURCE_FILES} ${GT_CONTACT_BRIDGE_CORE_FILES} "${VERSION_HEADER}" "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
+ 									 "${ROOT_DIR}/.clang-format" "${ROOT_DIR}/.editorconfig")
+ 
+ target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
+@@ -237,8 +256,11 @@ file(WRITE "${SMF_PATCHED_DIR}/SKSEMenuFramework.h" "${SMF_HEADER}")
+ 
+ target_include_directories(
+ 	"${PROJECT_NAME}" PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/src" "${SOURCE_DIR}" ${DETOURS_INCLUDE_DIRS}
++							  "${GT_CONTACT_BRIDGE_CORE_DIR}/include"
+ 							  ${BULLET_INCLUDE_DIRS} ${RAPIDJSON_INCLUDE_DIRS} "${SMF_PATCHED_DIR}")
+ 
++target_compile_definitions("${PROJECT_NAME}" PRIVATE GT_CONTACT_BRIDGE_EXPORTS=1)
++
+ # The vendored SDK header trips two /W4 warnings of its own (C4099 struct/class tag mismatch on ImGuiTextFilter; C5054
+ # deprecated operator| between distinct ImGui enums). It is included only by FSMPMenu.cpp, so silence just those two
+ # there; the rest of our /W4 /WX build stays strict. /utf-8 makes MSVC read this file's narrow string literals (the
+diff --git a/src/ExternalOwner.cpp b/src/ExternalOwner.cpp
+new file mode 100644
+index 0000000..2738122
+--- /dev/null
++++ b/src/ExternalOwner.cpp
+@@ -0,0 +1,212 @@
++#include "ExternalOwner.h"
++
++#include <algorithm>
++
++namespace hdt
++{
++	ExternalClaim::ExternalClaim(ExternalOwnerRegistry* registry, IMeshOwner* owner, std::uint64_t token, std::string ownerName) :
++		m_registry(registry),
++		m_owner(owner),
++		m_token(token),
++		m_ownerName(std::move(ownerName))
++	{}
++
++	ExternalClaim::ExternalClaim(ExternalClaim&& a_rhs) noexcept :
++		m_registry(a_rhs.m_registry),
++		m_owner(a_rhs.m_owner),
++		m_token(a_rhs.m_token),
++		m_ownerName(std::move(a_rhs.m_ownerName))
++	{
++		a_rhs.m_registry = nullptr;
++		a_rhs.m_owner = nullptr;
++		a_rhs.m_token = 0;
++	}
++
++	ExternalClaim& ExternalClaim::operator=(ExternalClaim&& a_rhs) noexcept
++	{
++		if (this != &a_rhs) {
++			reset();
++
++			m_registry = a_rhs.m_registry;
++			m_owner = a_rhs.m_owner;
++			m_token = a_rhs.m_token;
++			m_ownerName = std::move(a_rhs.m_ownerName);
++
++			a_rhs.m_registry = nullptr;
++			a_rhs.m_owner = nullptr;
++			a_rhs.m_token = 0;
++		}
++
++		return *this;
++	}
++
++	ExternalClaim::~ExternalClaim()
++	{
++		reset();
++	}
++
++	void ExternalClaim::reset()
++	{
++		ExternalOwnerRegistry* const registry = m_registry;
++		IMeshOwner* const owner = m_owner;
++		const std::uint64_t token = m_token;
++
++		m_registry = nullptr;
++		m_owner = nullptr;
++		m_token = 0;
++
++		if (owner && registry) {
++			registry->release(owner, token);
++		}
++	}
++
++	ExternalOwnerRegistry& ExternalOwnerRegistry::instance()
++	{
++		static ExternalOwnerRegistry s_registry;
++		return s_registry;
++	}
++
++	void ExternalOwnerRegistry::addOwner(IMeshOwner* owner, const MeshOwnerInfo& info)
++	{
++		if (!owner) {
++			return;
++		}
++
++		std::lock_guard<std::mutex> lock(m_mutex);
++		const auto known = std::find_if(m_owners.begin(), m_owners.end(), [owner](const Entry& e) { return e.owner == owner; });
++		if (known != m_owners.end()) {
++			return;
++		}
++
++		Entry entry{ owner, info.name && *info.name ? info.name : "unnamed", info.priority };
++		const auto position = std::find_if(m_owners.begin(), m_owners.end(), [&entry](const Entry& e) { return e.priority < entry.priority; });
++		m_owners.insert(position, std::move(entry));
++	}
++
++	void ExternalOwnerRegistry::removeOwner(IMeshOwner* owner)
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		m_owners.erase(std::remove_if(m_owners.begin(), m_owners.end(), [owner](const Entry& e) { return e.owner == owner; }), m_owners.end());
++		m_live.erase(std::remove_if(m_live.begin(), m_live.end(), [owner](const auto& l) { return l.second.owner == owner; }), m_live.end());
++		m_skips.erase(std::remove_if(m_skips.begin(), m_skips.end(), [owner](const Skip& s) { return s.owner == owner; }), m_skips.end());
++	}
++
++	bool ExternalOwnerRegistry::isRegistered(IMeshOwner* owner) const
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		return std::any_of(m_owners.begin(), m_owners.end(), [owner](const Entry& e) { return e.owner == owner; });
++	}
++
++	bool ExternalOwnerRegistry::isSkipped(IMeshOwner* owner, std::uint32_t actorFormId, const void* model) const
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		if (std::find(m_reloading.begin(), m_reloading.end(), actorFormId) == m_reloading.end()) {
++			return false;
++		}
++
++		return std::any_of(m_skips.begin(), m_skips.end(), [&](const Skip& s) {
++			return s.owner == owner && s.actorFormId == actorFormId && s.model == model;
++		});
++	}
++
++	void ExternalOwnerRegistry::beginRelinquishedReload(std::uint32_t actorFormId)
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		m_reloading.push_back(actorFormId);
++	}
++
++	void ExternalOwnerRegistry::endRelinquishedReload(std::uint32_t actorFormId)
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		const auto reloading = std::find(m_reloading.begin(), m_reloading.end(), actorFormId);
++		if (reloading != m_reloading.end()) {
++			m_reloading.erase(reloading);
++		}
++
++		m_skips.erase(std::remove_if(m_skips.begin(), m_skips.end(), [actorFormId](const Skip& s) { return s.actorFormId == actorFormId; }), m_skips.end());
++	}
++
++	ExternalClaim ExternalOwnerRegistry::tryClaim(const IMeshClaimContext& context, std::uint32_t actorFormId)
++	{
++		std::vector<Entry> owners;
++		{
++			std::lock_guard<std::mutex> lock(m_mutex);
++			owners = m_owners;
++		}
++
++		const void* model = context.getModel();
++		const std::uint64_t token = m_nextToken.fetch_add(1, std::memory_order_relaxed);
++		for (const Entry& entry : owners) {
++			// An earlier owner may have unregistered this one from inside its claim.
++			if (!isRegistered(entry.owner) || isSkipped(entry.owner, actorFormId, model)) {
++				continue;
++			}
++
++			if (!entry.owner->claim(context, token)) {
++				continue;
++			}
++
++			{
++				std::lock_guard<std::mutex> lock(m_mutex);
++				const bool stillRegistered = std::any_of(m_owners.begin(), m_owners.end(), [&](const Entry& e) { return e.owner == entry.owner; });
++				if (!stillRegistered) {
++					continue;
++				}
++
++				m_live.emplace_back(token, Live{ entry.owner, actorFormId, model });
++			}
++
++			return ExternalClaim(this, entry.owner, token, entry.name);
++		}
++
++		return ExternalClaim();
++	}
++
++	void ExternalOwnerRegistry::release(IMeshOwner* owner, std::uint64_t token)
++	{
++		if (!owner) {
++			return;
++		}
++
++		bool live = false;
++		{
++			std::lock_guard<std::mutex> lock(m_mutex);
++			const auto found = std::find_if(m_live.begin(), m_live.end(), [&](const auto& l) { return l.first == token && l.second.owner == owner; });
++			if (found != m_live.end()) {
++				m_live.erase(found);
++				live = true;
++			}
++		}
++
++		if (live) {
++			owner->release(token);
++		}
++	}
++
++	std::optional<ExternalOwnerRegistry::Relinquished> ExternalOwnerRegistry::relinquish(IMeshOwner* owner, std::uint64_t token)
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		const auto found = std::find_if(m_live.begin(), m_live.end(), [&](const auto& l) { return l.first == token && l.second.owner == owner; });
++		if (found == m_live.end()) {
++			return std::nullopt;
++		}
++
++		Live live = std::move(found->second);
++		m_live.erase(found);
++		const Relinquished result{ live.actorFormId };
++		m_skips.push_back(Skip{ live.owner, live.actorFormId, live.model });
++		return result;
++	}
++
++	std::vector<std::string> ExternalOwnerRegistry::ownerNames() const
++	{
++		std::lock_guard<std::mutex> lock(m_mutex);
++		std::vector<std::string> names;
++		names.reserve(m_owners.size());
++		for (const Entry& entry : m_owners) {
++			names.push_back(entry.name);
++		}
++
++		return names;
++	}
++}
+diff --git a/src/ExternalOwner.h b/src/ExternalOwner.h
+new file mode 100644
+index 0000000..60921e3
+--- /dev/null
++++ b/src/ExternalOwner.h
+@@ -0,0 +1,123 @@
++#pragma once
++
++#include "PluginOwnerAPI.h"
++
++#include <atomic>
++#include <cstdint>
++#include <mutex>
++#include <optional>
++#include <string>
++#include <utility>
++#include <vector>
++
++namespace hdt
++{
++	class ExternalOwnerRegistry;
++
++	// @brief Move-only RAII handle for one mesh claim; releases its owner when destroyed, reset or reassigned.
++	class ExternalClaim
++	{
++	public:
++		ExternalClaim() = default;
++		ExternalClaim(ExternalOwnerRegistry* registry, IMeshOwner* owner, std::uint64_t token, std::string ownerName = {});
++		ExternalClaim(ExternalClaim&& a_rhs) noexcept;
++
++		// Releases the claim this object currently holds before taking over the other's.
++		ExternalClaim& operator=(ExternalClaim&& a_rhs) noexcept;
++
++		ExternalClaim(const ExternalClaim&) = delete;
++		ExternalClaim& operator=(const ExternalClaim&) = delete;
++
++		~ExternalClaim();
++
++		bool active() const { return m_owner != nullptr; }
++		std::uint64_t token() const { return m_token; }
++
++		// The name the owner registered with, for logging.
++		const std::string& ownerName() const { return m_ownerName; }
++
++		// Releases if active, then becomes inactive.
++		void reset();
++
++	private:
++		ExternalOwnerRegistry* m_registry = nullptr;
++		IMeshOwner* m_owner = nullptr;
++		std::uint64_t m_token = 0;
++		std::string m_ownerName;
++	};
++
++	// @brief Process-wide list of mesh owners, asked in priority order whenever hdtSMP64 is about to create a
++	// system for an armor or head part.
++	class ExternalOwnerRegistry
++	{
++	public:
++		static ExternalOwnerRegistry& instance();
++
++		// Ignores null and already registered owners. Owners with a higher priority are asked first; equal
++		// priorities keep registration order.
++		void addOwner(IMeshOwner* owner, const MeshOwnerInfo& info = {});
++
++		// Ends the owner's live claims without release callbacks, and forgets its pending skips.
++		void removeOwner(IMeshOwner* owner);
++
++		// The first owner in priority order that returns true from claim wins; inactive when none does. An owner
++		// is not asked about a mesh it relinquished while that actor's relinquished reload runs (see
++		// beginRelinquishedReload). An owner that unregisters inside claim and then accepts does not win.
++		// @param actorFormId Form ID of the actor the mesh belongs to, 0 when there is none.
++		ExternalClaim tryClaim(const IMeshClaimContext& context, std::uint32_t actorFormId = 0);
++
++		// Calls owner->release only while the token is a live claim of that owner.
++		void release(IMeshOwner* owner, std::uint64_t token);
++
++		struct Relinquished
++		{
++			std::uint32_t actorFormId = 0;
++		};
++
++		// Ends a live claim without a release call and remembers that this owner must not get the mesh back in the
++		// reload that follows. Safe from any thread. Empty when the token is not a live claim of the owner.
++		std::optional<Relinquished> relinquish(IMeshOwner* owner, std::uint64_t token);
++
++		// Brackets the actor reload that a relinquish queued: only claims made in between honour that actor's skips,
++		// so an unrelated reload that happens first cannot use them up. endRelinquishedReload drops them.
++		void beginRelinquishedReload(std::uint32_t actorFormId);
++		void endRelinquishedReload(std::uint32_t actorFormId);
++
++		// Registered owner names in the order they are asked, for diagnostics and tests.
++		std::vector<std::string> ownerNames() const;
++
++	private:
++		struct Entry
++		{
++			IMeshOwner* owner = nullptr;
++			std::string name;
++			std::int32_t priority = 0;
++		};
++
++		struct Live
++		{
++			IMeshOwner* owner = nullptr;
++			std::uint32_t actorFormId = 0;
++			const void* model = nullptr;
++		};
++
++		// A mesh is told apart by its model node, because one actor can wear two meshes with the same physics file.
++		struct Skip
++		{
++			IMeshOwner* owner = nullptr;
++			std::uint32_t actorFormId = 0;
++			const void* model = nullptr;
++		};
++
++		bool isRegistered(IMeshOwner* owner) const;
++		bool isSkipped(IMeshOwner* owner, std::uint32_t actorFormId, const void* model) const;
++
++		// Owner callbacks run outside m_mutex so an owner may register or unregister owners from inside claim.
++		mutable std::mutex m_mutex;
++		std::vector<Entry> m_owners;
++		std::vector<std::pair<std::uint64_t, Live>> m_live;
++		std::vector<Skip> m_skips;
++		std::vector<std::uint32_t> m_reloading;
++		std::atomic<std::uint64_t> m_nextToken{ 1 };
++	};
++}
+diff --git a/src/GTContactBridgeProducer.cpp b/src/GTContactBridgeProducer.cpp
+new file mode 100644
+index 0000000..254a52e
+--- /dev/null
++++ b/src/GTContactBridgeProducer.cpp
+@@ -0,0 +1,930 @@
++#include "GTContactBridgeProducer.h"
++
++#include "GTContactFrameCollector.h"
++#include "hdtSkinnedMesh/hdtSkinnedMeshBone.h"
++#include "hdtSkyrimBone.h"
++
++#include <BulletCollision/CollisionDispatch/btCollisionDispatcher.h>
++#include <BulletCollision/NarrowPhaseCollision/btPersistentManifold.h>
++#include <BulletDynamics/Dynamics/btRigidBody.h>
++
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <cmath>
++#include <cstring>
++#include <limits>
++#include <mutex>
++#include <string_view>
++
++namespace hdt::gtcontact
++{
++	namespace
++	{
++		gt::contact::ContactFrameCollector g_collector;
++		std::atomic_bool g_captureEnabled{ false };
++		std::uint64_t g_nextFrameSequence{ 1 };
++		std::uint32_t g_substepIndex{ 0 };
++		bool g_frameOpen{ false };
++		std::mutex g_targetMutex;
++		std::array<std::uint64_t, GT_CONTACT_MAX_TARGET_SKELETONS> g_pendingTargets{};
++		std::size_t g_pendingTargetCount{ 0 };
++		std::uint64_t g_pendingTargetGeneration{ 0 };
++		std::array<std::uint64_t, GT_CONTACT_MAX_TARGET_SKELETONS> g_activeTargets{};
++		std::size_t g_activeTargetCount{ 0 };
++		std::uint64_t g_activeTargetGeneration{ 0 };
++
++		constexpr std::uint64_t kTelemetryFrameInterval = 300U;
++
++		struct ProducerTelemetry
++		{
++			std::uint64_t framesBegun{ 0 };
++			std::uint64_t framesPublished{ 0 };
++			std::uint64_t beginRejected{ 0 };
++			std::uint64_t forcedFrameClose{ 0 };
++			std::uint64_t expectedSubsteps{ 0 };
++			std::uint64_t observedSubsteps{ 0 };
++			std::uint64_t underflowFrames{ 0 };
++			std::uint64_t overflowFrames{ 0 };
++			std::uint64_t overflowCallbacks{ 0 };
++			std::uint64_t manifoldsScanned{ 0 };
++			std::uint64_t endpointDecodeFailures{ 0 };
++			std::uint64_t nonBreastManifolds{ 0 };
++			std::uint64_t nonTargetManifolds{ 0 };
++			std::uint64_t contactPointsSeen{ 0 };
++			std::uint64_t nonPenetratingPoints{ 0 };
++			std::uint64_t invalidSubstepTimes{ 0 };
++			std::uint64_t invalidPhysicsPoints{ 0 };
++			std::uint64_t targetEpochDrops{ 0 };
++			std::uint64_t addAccepted{ 0 };
++			std::uint64_t addDuplicateMerged{ 0 };
++			std::uint64_t addInvalid{ 0 };
++			std::uint64_t addNoOpenFrame{ 0 };
++			std::uint64_t addCapacityRetained{ 0 };
++			std::uint64_t addCapacityDropped{ 0 };
++			std::uint64_t continuitySubmitted{ 0 };
++			std::uint64_t fingerContacts{ 0 };
++			std::uint64_t handContacts{ 0 };
++			std::uint64_t armContacts{ 0 };
++			std::uint64_t legContacts{ 0 };
++			std::uint64_t footContacts{ 0 };
++			std::uint64_t otherExternalContacts{ 0 };
++			std::uint64_t breastToBreastContacts{ 0 };
++			std::uint64_t sameActorContacts{ 0 };
++			std::uint64_t crossActorContacts{ 0 };
++			float maximumDepth{ 0.0F };
++			float maximumImpulse{ 0.0F };
++			float maximumApproachSpeed{ 0.0F };
++		};
++
++		ProducerTelemetry g_telemetry{};
++		std::uint64_t g_lastTelemetryLogFrame{ 0 };
++		std::uint64_t g_lastAnomalyLogFrame{ 0 };
++
++		// FSMP can omit an otherwise continuous manifold for an isolated frame.
++		// Preserve one representative per rigid-body pair for three missing frames,
++		// fading penetration only.  This is deliberately bounded and allocation-free
++		// because it runs on the physics thread.
++		constexpr std::size_t kContinuityPairCapacity =
++			gt::contact::ContactFrameCollector::kPublishedCapacity;
++		constexpr std::uint64_t kContinuityMissingFrameTtl = 3U;
++		constexpr float kContinuityDecayDivisor =
++			static_cast<float>(kContinuityMissingFrameTtl + 1U);
++
++		struct ContinuityPair
++		{
++			GTContactEndpointV1 endpointA{};
++			GTContactEndpointV1 endpointB{};
++			// Contact points are kept in absolute world space and rebased when a
++			// synthetic sample is emitted, so an origin shift cannot move the hold.
++			GTContactSampleV1 strongestRealSample{};
++			std::uint64_t targetGeneration{ 0 };
++			std::uint64_t lastRealFrameSequence{ 0 };
++		};
++
++		std::array<ContinuityPair, kContinuityPairCapacity> g_continuityPairs{};
++		std::size_t g_continuityPairCount{ 0 };
++		std::uint64_t g_currentFrameSequence{ 0 };
++		std::uint64_t g_currentFrameTargetGeneration{ 0 };
++		float g_currentFrameTimeStep{ 0.0F };
++		std::uint32_t g_currentFrameSubstepCount{ 0 };
++		float g_lastObservedSubstepTime{ 0.0F };
++		std::array<float, 3> g_currentFrameOriginOffset{};
++
++		[[nodiscard]] int CompareEndpointIdentity(
++			const GTContactEndpointV1& lhs,
++			const GTContactEndpointV1& rhs) noexcept
++		{
++			if (lhs.skeletonToken != rhs.skeletonToken) {
++				return lhs.skeletonToken < rhs.skeletonToken ? -1 : 1;
++			}
++			if (lhs.boneNameHash != rhs.boneNameHash) {
++				return lhs.boneNameHash < rhs.boneNameHash ? -1 : 1;
++			}
++			const int nameResult =
++				std::memcmp(lhs.boneName, rhs.boneName, GT_CONTACT_BONE_NAME_CAPACITY);
++			if (nameResult != 0) {
++				return nameResult < 0 ? -1 : 1;
++			}
++			if (lhs.rigidBodyToken != rhs.rigidBodyToken) {
++				return lhs.rigidBodyToken < rhs.rigidBodyToken ? -1 : 1;
++			}
++			if (lhs.flags != rhs.flags) {
++				return lhs.flags < rhs.flags ? -1 : 1;
++			}
++			return 0;
++		}
++
++		void CanonicalPair(
++			const GTContactSampleV1& sample,
++			const GTContactEndpointV1*& endpointA,
++			const GTContactEndpointV1*& endpointB) noexcept
++		{
++			if (CompareEndpointIdentity(sample.endpointB, sample.endpointA) < 0) {
++				endpointA = &sample.endpointB;
++				endpointB = &sample.endpointA;
++			} else {
++				endpointA = &sample.endpointA;
++				endpointB = &sample.endpointB;
++			}
++		}
++
++		[[nodiscard]] float ApproachSpeed(const GTContactSampleV1& sample) noexcept
++		{
++			const float projected =
++				sample.relativeVelocityAminusB[0] * sample.normalOnB[0] +
++				sample.relativeVelocityAminusB[1] * sample.normalOnB[1] +
++				sample.relativeVelocityAminusB[2] * sample.normalOnB[2];
++			return std::max(0.0F, -projected);
++		}
++
++		void RecordAddResult(const gt::contact::AddResult result) noexcept
++		{
++			switch (result) {
++			case gt::contact::AddResult::accepted:
++				++g_telemetry.addAccepted;
++				break;
++			case gt::contact::AddResult::duplicateMerged:
++				++g_telemetry.addDuplicateMerged;
++				break;
++			case gt::contact::AddResult::invalidSample:
++				++g_telemetry.addInvalid;
++				break;
++			case gt::contact::AddResult::noOpenFrame:
++				++g_telemetry.addNoOpenFrame;
++				break;
++			case gt::contact::AddResult::capacityRetained:
++				++g_telemetry.addCapacityRetained;
++				break;
++			case gt::contact::AddResult::capacityDropped:
++				++g_telemetry.addCapacityDropped;
++				break;
++			}
++		}
++
++		[[nodiscard]] bool FinalizeSubstepTelemetryLocked() noexcept
++		{
++			g_telemetry.observedSubsteps += g_substepIndex;
++			if (g_substepIndex < g_currentFrameSubstepCount) {
++				++g_telemetry.underflowFrames;
++				return true;
++			}
++			if (g_substepIndex > g_currentFrameSubstepCount) {
++				++g_telemetry.overflowFrames;
++				return true;
++			}
++			return false;
++		}
++
++		void LogProducerTelemetryLocked(const bool substepAnomaly) noexcept
++		{
++			const bool periodic =
++				g_telemetry.framesPublished >=
++				g_lastTelemetryLogFrame + kTelemetryFrameInterval;
++			const bool anomalyDue =
++				substepAnomaly &&
++				(g_lastAnomalyLogFrame == 0U ||
++				 g_telemetry.framesPublished >= g_lastAnomalyLogFrame + 60U);
++			if (!periodic && !anomalyDue) {
++				return;
++			}
++
++			g_lastTelemetryLogFrame = g_telemetry.framesPublished;
++			if (substepAnomaly) {
++				g_lastAnomalyLogFrame = g_telemetry.framesPublished;
++			}
++			if (anomalyDue) {
++				logger::warn(
++					"[GTContactBridge v0.8.4 producer] substep mismatch frame={} "
++					"observed={} expected={}",
++					g_currentFrameSequence,
++					g_substepIndex,
++					g_currentFrameSubstepCount);
++			}
++			logger::info(
++				"[GTContactBridge v0.8.4 producer] flow published={}/begun={} beginRejected={} "
++				"forcedClose={} substepsObserved={}/expected={} underFrames={} overFrames={} "
++				"overCallbacks={}",
++				g_telemetry.framesPublished,
++				g_telemetry.framesBegun,
++				g_telemetry.beginRejected,
++				g_telemetry.forcedFrameClose,
++				g_telemetry.observedSubsteps,
++				g_telemetry.expectedSubsteps,
++				g_telemetry.underflowFrames,
++				g_telemetry.overflowFrames,
++				g_telemetry.overflowCallbacks);
++			logger::info(
++				"[GTContactBridge v0.8.4 producer] capture manifolds={} endpointFail={} "
++				"nonBreast={} nonTarget={} points={} nonPenetrating={} invalidStepTime={} "
++				"invalidPhysics={} epochDrops={} "
++				"add(a/d/i/n/r/x)={}/{}/{}/{}/{}/{} continuity={}",
++				g_telemetry.manifoldsScanned,
++				g_telemetry.endpointDecodeFailures,
++				g_telemetry.nonBreastManifolds,
++				g_telemetry.nonTargetManifolds,
++				g_telemetry.contactPointsSeen,
++				g_telemetry.nonPenetratingPoints,
++				g_telemetry.invalidSubstepTimes,
++				g_telemetry.invalidPhysicsPoints,
++				g_telemetry.targetEpochDrops,
++				g_telemetry.addAccepted,
++				g_telemetry.addDuplicateMerged,
++				g_telemetry.addInvalid,
++				g_telemetry.addNoOpenFrame,
++				g_telemetry.addCapacityRetained,
++				g_telemetry.addCapacityDropped,
++				g_telemetry.continuitySubmitted);
++			logger::info(
++				"[GTContactBridge v0.8.4 producer] validatedSources finger={} hand={} arm={} leg={} "
++				"foot={} other={} breastBreast={} sameActor={} crossActor={} "
++				"maxDepth={:.5f} maxImpulse={:.5f} maxApproach={:.5f}",
++				g_telemetry.fingerContacts,
++				g_telemetry.handContacts,
++				g_telemetry.armContacts,
++				g_telemetry.legContacts,
++				g_telemetry.footContacts,
++				g_telemetry.otherExternalContacts,
++				g_telemetry.breastToBreastContacts,
++				g_telemetry.sameActorContacts,
++				g_telemetry.crossActorContacts,
++				g_telemetry.maximumDepth,
++				g_telemetry.maximumImpulse,
++				g_telemetry.maximumApproachSpeed);
++		}
++
++		[[nodiscard]] bool BetterContinuityRepresentative(
++			const GTContactSampleV1& candidate,
++			const GTContactSampleV1& incumbent) noexcept
++		{
++			if (candidate.penetrationDepth != incumbent.penetrationDepth) {
++				return candidate.penetrationDepth > incumbent.penetrationDepth;
++			}
++			if (candidate.normalImpulse != incumbent.normalImpulse) {
++				return candidate.normalImpulse > incumbent.normalImpulse;
++			}
++			return ApproachSpeed(candidate) > ApproachSpeed(incumbent);
++		}
++
++		void ClearContinuityLocked() noexcept
++		{
++			g_continuityPairCount = 0U;
++		}
++
++		[[nodiscard]] ContinuityPair* FindContinuityPairLocked(
++			const GTContactEndpointV1& endpointA,
++			const GTContactEndpointV1& endpointB) noexcept
++		{
++			for (std::size_t index = 0; index < g_continuityPairCount; ++index) {
++				auto& pair = g_continuityPairs[index];
++				if (CompareEndpointIdentity(pair.endpointA, endpointA) == 0 &&
++					CompareEndpointIdentity(pair.endpointB, endpointB) == 0) {
++					return &pair;
++				}
++			}
++			return nullptr;
++		}
++
++		void StoreAbsoluteContactPoints(GTContactSampleV1& sample) noexcept
++		{
++			for (std::size_t axis = 0; axis < g_currentFrameOriginOffset.size(); ++axis) {
++				sample.pointOnA[axis] += g_currentFrameOriginOffset[axis];
++				sample.pointOnB[axis] += g_currentFrameOriginOffset[axis];
++			}
++		}
++
++		void RecordContinuitySampleLocked(const GTContactSampleV1& sample) noexcept
++		{
++			if (g_currentFrameSequence == 0U || g_currentFrameTargetGeneration == 0U ||
++				g_currentFrameTargetGeneration != g_activeTargetGeneration) {
++				return;
++			}
++
++			const GTContactEndpointV1* endpointA = nullptr;
++			const GTContactEndpointV1* endpointB = nullptr;
++			CanonicalPair(sample, endpointA, endpointB);
++			auto* pair = FindContinuityPairLocked(*endpointA, *endpointB);
++			if (!pair) {
++				if (g_continuityPairCount == g_continuityPairs.size()) {
++					return;
++				}
++				pair = &g_continuityPairs[g_continuityPairCount++];
++				*pair = {};
++				pair->endpointA = *endpointA;
++				pair->endpointB = *endpointB;
++			}
++
++			if (pair->targetGeneration != g_currentFrameTargetGeneration ||
++				pair->lastRealFrameSequence != g_currentFrameSequence ||
++				BetterContinuityRepresentative(sample, pair->strongestRealSample)) {
++				pair->strongestRealSample = sample;
++				StoreAbsoluteContactPoints(pair->strongestRealSample);
++			}
++			pair->targetGeneration = g_currentFrameTargetGeneration;
++			pair->lastRealFrameSequence = g_currentFrameSequence;
++		}
++
++		[[nodiscard]] constexpr char LowerAscii(const char value) noexcept
++		{
++			return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
++		}
++
++		[[nodiscard]] bool ContainsAsciiInsensitive(
++			const std::string_view value,
++			const std::string_view token) noexcept
++		{
++			if (token.empty() || token.size() > value.size()) {
++				return false;
++			}
++			for (std::size_t start = 0; start + token.size() <= value.size(); ++start) {
++				bool matches = true;
++				for (std::size_t offset = 0; offset < token.size(); ++offset) {
++					if (LowerAscii(value[start + offset]) != LowerAscii(token[offset])) {
++						matches = false;
++						break;
++					}
++				}
++				if (matches) {
++					return true;
++				}
++			}
++			return false;
++		}
++
++		void RecordExternalFamily(const GTContactEndpointV1& endpoint) noexcept
++		{
++			if ((endpoint.flags & GT_CONTACT_ENDPOINT_EXTERNAL_COLLIDER) == 0U) {
++				return;
++			}
++
++			const std::string_view name{ endpoint.boneName };
++			if (ContainsAsciiInsensitive(name, "finger") ||
++				ContainsAsciiInsensitive(name, "thumb")) {
++				++g_telemetry.fingerContacts;
++			} else if (ContainsAsciiInsensitive(name, "hand")) {
++				++g_telemetry.handContacts;
++			} else if (ContainsAsciiInsensitive(name, "forearm") ||
++				ContainsAsciiInsensitive(name, "upperarm") ||
++				ContainsAsciiInsensitive(name, "clavicle") ||
++				ContainsAsciiInsensitive(name, "arm")) {
++				++g_telemetry.armContacts;
++			} else if (ContainsAsciiInsensitive(name, "foot") ||
++				ContainsAsciiInsensitive(name, "toe")) {
++				++g_telemetry.footContacts;
++			} else if (ContainsAsciiInsensitive(name, "thigh") ||
++				ContainsAsciiInsensitive(name, "calf") ||
++				ContainsAsciiInsensitive(name, "knee") ||
++				ContainsAsciiInsensitive(name, "leg")) {
++				++g_telemetry.legContacts;
++			} else {
++				++g_telemetry.otherExternalContacts;
++			}
++		}
++
++		void RecordContactSource(const GTContactSampleV1& sample) noexcept
++		{
++			const bool breastA =
++				(sample.endpointA.flags & GT_CONTACT_ENDPOINT_BREAST) != 0U;
++			const bool breastB =
++				(sample.endpointB.flags & GT_CONTACT_ENDPOINT_BREAST) != 0U;
++			if (breastA && breastB) {
++				++g_telemetry.breastToBreastContacts;
++			}
++			if (sample.endpointA.skeletonToken == sample.endpointB.skeletonToken) {
++				++g_telemetry.sameActorContacts;
++			} else {
++				++g_telemetry.crossActorContacts;
++			}
++			RecordExternalFamily(sample.endpointA);
++			RecordExternalFamily(sample.endpointB);
++			g_telemetry.maximumDepth =
++				std::max(g_telemetry.maximumDepth, sample.penetrationDepth);
++			g_telemetry.maximumImpulse =
++				std::max(g_telemetry.maximumImpulse, sample.normalImpulse);
++			g_telemetry.maximumApproachSpeed =
++				std::max(g_telemetry.maximumApproachSpeed, ApproachSpeed(sample));
++		}
++
++		[[nodiscard]] bool IsBreastBoneName(const std::string_view name) noexcept
++		{
++			return ContainsAsciiInsensitive(name, "soft_l") ||
++			       ContainsAsciiInsensitive(name, "soft_r");
++		}
++
++		[[nodiscard]] bool CopyBoneName(
++			const char* source,
++			char (&destination)[GT_CONTACT_BONE_NAME_CAPACITY]) noexcept
++		{
++			constexpr std::string_view unnamed{ "<unnamed>" };
++			const std::string_view value = source && *source ? std::string_view(source) : unnamed;
++			const std::size_t count = std::min(
++				value.size(),
++				static_cast<std::size_t>(GT_CONTACT_BONE_NAME_CAPACITY - 1U));
++			std::memcpy(destination, value.data(), count);
++			destination[count] = '\0';
++			return IsBreastBoneName(std::string_view(destination, count));
++		}
++
++		[[nodiscard]] bool MakeEndpoint(
++			const btCollisionObject* object,
++			GTContactEndpointV1& endpoint) noexcept
++		{
++			if (!object || !object->getUserPointer()) {
++				return false;
++			}
++
++			auto* baseBone = static_cast<SkinnedMeshBone*>(object->getUserPointer());
++			auto* bone = dynamic_cast<SkyrimBone*>(baseBone);
++			if (!bone || !bone->m_skeleton) {
++				return false;
++			}
++
++			endpoint = {};
++			endpoint.structSize = sizeof(endpoint);
++			endpoint.skeletonToken = reinterpret_cast<std::uint64_t>(bone->m_skeleton.get());
++			endpoint.rigidBodyToken = reinterpret_cast<std::uint64_t>(object);
++			if (object->isStaticObject()) {
++				endpoint.flags |= GT_CONTACT_ENDPOINT_STATIC;
++			} else if (object->isKinematicObject()) {
++				endpoint.flags |= GT_CONTACT_ENDPOINT_KINEMATIC;
++			} else {
++				endpoint.flags |= GT_CONTACT_ENDPOINT_DYNAMIC;
++			}
++
++			const bool breast = CopyBoneName(bone->m_name.c_str(), endpoint.boneName);
++			endpoint.flags |= breast ? GT_CONTACT_ENDPOINT_BREAST :
++			                           GT_CONTACT_ENDPOINT_EXTERNAL_COLLIDER;
++			endpoint.boneNameHash = gt::contact::ContactFrameCollector::HashBoneName(
++				endpoint.boneName);
++			return endpoint.skeletonToken != 0U && endpoint.rigidBodyToken != 0U &&
++			       endpoint.boneNameHash != 0U;
++		}
++
++		void CopyVector(const btVector3& source, float (&destination)[3]) noexcept
++		{
++			destination[0] = static_cast<float>(source.x());
++			destination[1] = static_cast<float>(source.y());
++			destination[2] = static_cast<float>(source.z());
++		}
++
++		[[nodiscard]] bool IsFiniteVector(const btVector3& value) noexcept
++		{
++			return std::isfinite(static_cast<float>(value.x())) &&
++			       std::isfinite(static_cast<float>(value.y())) &&
++			       std::isfinite(static_cast<float>(value.z()));
++		}
++
++		[[nodiscard]] btVector3 PointVelocity(
++			const btCollisionObject* object,
++			const btVector3& worldPoint) noexcept
++		{
++			const auto* body = btRigidBody::upcast(object);
++			return body ? body->getVelocityInLocalPoint(
++			                  worldPoint - body->getCenterOfMassPosition()) :
++			              btVector3{ 0.0F, 0.0F, 0.0F };
++		}
++
++		GTContactStatusV1 GT_CONTACT_CALL CopyLatestFrame(
++			GTContactFrameV1* outFrame,
++			GTContactSampleV1* outSamples,
++			const std::uint32_t sampleCapacity,
++			std::uint32_t* outCopiedSampleCount)
++		{
++			// Keep the target epoch stable through destination validation and
++			// snapshot copying.  SetTargetSkeletons uses the same mutex, making
++			// ownership mismatch and normal "new frame pending" states distinct.
++			std::scoped_lock lock(g_targetMutex);
++			return g_collector.CopyLatest(
++				outFrame, outSamples, sampleCapacity, outCopiedSampleCount,
++				g_pendingTargetGeneration);
++		}
++
++		GTContactStatusV1 GT_CONTACT_CALL SetCaptureEnabled(const std::uint32_t enabled)
++		{
++			if (enabled > 1U) {
++				return GT_CONTACT_STATUS_INVALID_ARGUMENT;
++			}
++			const bool captureEnabled = enabled != 0U;
++			g_captureEnabled.store(captureEnabled, std::memory_order_release);
++			if (!captureEnabled) {
++				std::scoped_lock lock(g_targetMutex);
++				ClearContinuityLocked();
++			}
++			logger::info(
++				"[GTContactBridge v0.8.4 producer] capture {}",
++				captureEnabled ? "enabled" : "disabled");
++			return GT_CONTACT_STATUS_OK;
++		}
++
++		GTContactStatusV1 GT_CONTACT_CALL SetTargetSkeletons(
++			const std::uint64_t* skeletonTokens,
++			const std::uint32_t skeletonTokenCount,
++			std::uint64_t* outTargetGeneration)
++		{
++			if (skeletonTokenCount > GT_CONTACT_MAX_TARGET_SKELETONS ||
++				(skeletonTokenCount != 0U && !skeletonTokens) || !outTargetGeneration) {
++				return GT_CONTACT_STATUS_INVALID_ARGUMENT;
++			}
++			*outTargetGeneration = 0U;
++
++			std::array<std::uint64_t, GT_CONTACT_MAX_TARGET_SKELETONS> sorted{};
++			std::size_t count = 0;
++			for (std::uint32_t index = 0; index < skeletonTokenCount; ++index) {
++				if (skeletonTokens[index] == 0U) {
++					return GT_CONTACT_STATUS_INVALID_ARGUMENT;
++				}
++				sorted[count++] = skeletonTokens[index];
++			}
++			std::sort(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(count));
++			const auto uniqueEnd = std::unique(
++				sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(count));
++			count = static_cast<std::size_t>(uniqueEnd - sorted.begin());
++
++			std::scoped_lock lock(g_targetMutex);
++			std::uint64_t nextGeneration = 0U;
++			const auto generationStatus = gt::contact::AdvanceTargetGeneration(
++				g_pendingTargetGeneration, &nextGeneration);
++			if (generationStatus != GT_CONTACT_STATUS_OK) {
++				return generationStatus;
++			}
++			g_pendingTargets = sorted;
++			g_pendingTargetCount = count;
++			g_pendingTargetGeneration = nextGeneration;
++			// Every successful target update starts a new ownership epoch, even
++			// when the token list is textually identical.  Never carry a held pair
++			// across that boundary.
++			ClearContinuityLocked();
++			*outTargetGeneration = g_pendingTargetGeneration;
++			logger::info(
++				"[GTContactBridge v0.8.4 producer] target epoch={} skeletons={}",
++				g_pendingTargetGeneration,
++				g_pendingTargetCount);
++			return GT_CONTACT_STATUS_OK;
++		}
++
++		[[nodiscard]] bool IsActiveTarget(const std::uint64_t skeletonToken) noexcept
++		{
++			return std::binary_search(
++				g_activeTargets.begin(),
++				g_activeTargets.begin() + static_cast<std::ptrdiff_t>(g_activeTargetCount),
++				skeletonToken);
++		}
++
++		void RemoveContinuityPairLocked(const std::size_t index) noexcept
++		{
++			--g_continuityPairCount;
++			if (index != g_continuityPairCount) {
++				g_continuityPairs[index] = g_continuityPairs[g_continuityPairCount];
++			}
++			g_continuityPairs[g_continuityPairCount] = {};
++		}
++
++		void PruneExpiredContinuityLocked() noexcept
++		{
++			std::size_t index = 0U;
++			while (index < g_continuityPairCount) {
++				const auto& pair = g_continuityPairs[index];
++				const bool invalidSequence = pair.lastRealFrameSequence == 0U ||
++					pair.lastRealFrameSequence > g_currentFrameSequence;
++				const bool expired = !invalidSequence &&
++					g_currentFrameSequence - pair.lastRealFrameSequence >
++						kContinuityMissingFrameTtl;
++				if (pair.targetGeneration != g_currentFrameTargetGeneration ||
++					invalidSequence || expired ||
++					(!IsActiveTarget(pair.endpointA.skeletonToken) &&
++					 !IsActiveTarget(pair.endpointB.skeletonToken))) {
++					RemoveContinuityPairLocked(index);
++					continue;
++				}
++				++index;
++			}
++		}
++
++		void AddContinuitySamplesLocked() noexcept
++		{
++			if (g_currentFrameSequence == 0U || g_currentFrameSubstepCount == 0U ||
++				g_currentFrameTargetGeneration == 0U ||
++				g_currentFrameTargetGeneration != g_activeTargetGeneration ||
++				g_activeTargetGeneration != g_pendingTargetGeneration) {
++				ClearContinuityLocked();
++				return;
++			}
++
++			std::size_t index = 0U;
++			while (index < g_continuityPairCount) {
++				auto& pair = g_continuityPairs[index];
++				if (pair.targetGeneration != g_currentFrameTargetGeneration ||
++					pair.lastRealFrameSequence == 0U ||
++					pair.lastRealFrameSequence > g_currentFrameSequence ||
++					(!IsActiveTarget(pair.endpointA.skeletonToken) &&
++					 !IsActiveTarget(pair.endpointB.skeletonToken))) {
++					RemoveContinuityPairLocked(index);
++					continue;
++				}
++
++				const std::uint64_t age =
++					g_currentFrameSequence - pair.lastRealFrameSequence;
++				if (age == 0U) {
++					++index;
++					continue;
++				}
++				if (age > kContinuityMissingFrameTtl) {
++					RemoveContinuityPairLocked(index);
++					continue;
++				}
++
++				GTContactSampleV1 held = pair.strongestRealSample;
++				held.frameSequence = 0U;
++				held.substepIndex = g_currentFrameSubstepCount - 1U;
++				held.timeStep = g_lastObservedSubstepTime > 0.0F ?
++					g_lastObservedSubstepTime :
++					g_currentFrameTimeStep /
++						static_cast<float>(g_currentFrameSubstepCount);
++				const float remaining = static_cast<float>(
++					kContinuityMissingFrameTtl + 1U - age);
++				held.penetrationDepth =
++					pair.strongestRealSample.penetrationDepth *
++					(remaining / kContinuityDecayDivisor);
++				// Stale impulse or velocity would add energy and turn a continuity hold
++				// into a ghost push.  Only the decaying penetration survives.
++				held.normalImpulse = 0.0F;
++				for (std::size_t axis = 0; axis < g_currentFrameOriginOffset.size(); ++axis) {
++					held.pointOnA[axis] -= g_currentFrameOriginOffset[axis];
++					held.pointOnB[axis] -= g_currentFrameOriginOffset[axis];
++					held.relativeVelocityAminusB[axis] = 0.0F;
++				}
++				const auto addResult = g_collector.Add(held);
++				++g_telemetry.continuitySubmitted;
++				RecordAddResult(addResult);
++				if (addResult == gt::contact::AddResult::invalidSample ||
++					addResult == gt::contact::AddResult::noOpenFrame) {
++					RemoveContinuityPairLocked(index);
++					continue;
++				}
++				++index;
++			}
++		}
++	}
++
++	bool IsCaptureEnabled() noexcept
++	{
++		return g_captureEnabled.load(std::memory_order_acquire);
++	}
++
++	void BeginFrame(
++		const float frameTimeStep,
++		const btVector3& originOffset,
++		const std::uint32_t substepCount) noexcept
++	{
++		if (g_frameOpen) {
++			// A second begin means the preceding physics frame was not closed
++			// normally.  Publish what was actually observed, but do not extend
++			// potentially stale pairs through the discontinuity.
++			std::scoped_lock lock(g_targetMutex);
++			ClearContinuityLocked();
++			const bool substepAnomaly = FinalizeSubstepTelemetryLocked();
++			if (g_collector.EndFrame()) {
++				++g_telemetry.framesPublished;
++			}
++			++g_telemetry.forcedFrameClose;
++			LogProducerTelemetryLocked(substepAnomaly);
++			g_frameOpen = false;
++		}
++		if (!IsCaptureEnabled()) {
++			return;
++		}
++
++		const std::array<float, 3> offset{
++			static_cast<float>(originOffset.x()),
++			static_cast<float>(originOffset.y()),
++			static_cast<float>(originOffset.z()),
++		};
++		std::scoped_lock lock(g_targetMutex);
++		g_activeTargets = g_pendingTargets;
++		g_activeTargetCount = g_pendingTargetCount;
++		g_activeTargetGeneration = g_pendingTargetGeneration;
++		if (g_currentFrameTargetGeneration != 0U &&
++			g_currentFrameTargetGeneration != g_activeTargetGeneration) {
++			ClearContinuityLocked();
++		}
++
++		g_substepIndex = 0U;
++		g_lastObservedSubstepTime = 0.0F;
++		const std::uint64_t frameSequence = g_nextFrameSequence++;
++		g_frameOpen = g_collector.BeginFrame(
++			frameSequence, frameTimeStep, offset, substepCount,
++			g_activeTargetGeneration);
++		if (!g_frameOpen) {
++			++g_telemetry.beginRejected;
++			ClearContinuityLocked();
++			g_currentFrameSequence = 0U;
++			g_currentFrameTargetGeneration = 0U;
++			g_currentFrameTimeStep = 0.0F;
++			g_currentFrameSubstepCount = 0U;
++			g_currentFrameOriginOffset = {};
++			return;
++		}
++		g_currentFrameSequence = frameSequence;
++		g_currentFrameTargetGeneration = g_activeTargetGeneration;
++		g_currentFrameTimeStep = frameTimeStep;
++		g_currentFrameSubstepCount = substepCount;
++		g_currentFrameOriginOffset = offset;
++		++g_telemetry.framesBegun;
++		g_telemetry.expectedSubsteps += substepCount;
++		PruneExpiredContinuityLocked();
++	}
++
++	void CollectSolvedManifolds(btDispatcher* dispatcher, const float substepTime) noexcept
++	{
++		if (!g_frameOpen || !dispatcher) {
++			return;
++		}
++
++		// This callback occurs once for every actual Bullet solve.  Advance the
++		// index even if there are no targets or manifolds; otherwise the next
++		// contact-bearing substep is mislabeled as substep zero.
++		const std::uint32_t currentSubstep = g_substepIndex;
++		if (g_substepIndex != std::numeric_limits<std::uint32_t>::max()) {
++			++g_substepIndex;
++		}
++		if (currentSubstep >= g_currentFrameSubstepCount) {
++			// Never feed an out-of-range sample to the ABI collector.  ABI v1 marks
++			// the whole frame invalid when even one such sample is submitted.
++			++g_telemetry.overflowCallbacks;
++			return;
++		}
++		if (!std::isfinite(substepTime) || substepTime <= 0.0F ||
++			substepTime > g_currentFrameTimeStep) {
++			++g_telemetry.invalidSubstepTimes;
++			return;
++		}
++		g_lastObservedSubstepTime = substepTime;
++		if (!IsCaptureEnabled()) {
++			return;
++		}
++		if (g_activeTargetCount == 0U) {
++			return;
++		}
++
++		const int manifoldCount = dispatcher->getNumManifolds();
++		if (manifoldCount > 0) {
++			g_telemetry.manifoldsScanned += static_cast<std::uint64_t>(manifoldCount);
++		}
++		for (int manifoldIndex = 0; manifoldIndex < manifoldCount; ++manifoldIndex) {
++			auto* manifold = dispatcher->getManifoldByIndexInternal(manifoldIndex);
++			if (!manifold) {
++				continue;
++			}
++
++			const auto* objectA = static_cast<const btCollisionObject*>(manifold->getBody0());
++			const auto* objectB = static_cast<const btCollisionObject*>(manifold->getBody1());
++			GTContactEndpointV1 endpointA{};
++			GTContactEndpointV1 endpointB{};
++			const bool endpointAValid = MakeEndpoint(objectA, endpointA);
++			const bool endpointBValid = MakeEndpoint(objectB, endpointB);
++			if (!endpointAValid || !endpointBValid) {
++				++g_telemetry.endpointDecodeFailures;
++				continue;
++			}
++			if (((endpointA.flags | endpointB.flags) & GT_CONTACT_ENDPOINT_BREAST) == 0U) {
++				++g_telemetry.nonBreastManifolds;
++				continue;
++			}
++			if (!IsActiveTarget(endpointA.skeletonToken) &&
++				!IsActiveTarget(endpointB.skeletonToken)) {
++				++g_telemetry.nonTargetManifolds;
++				continue;
++			}
++
++			const int contactCount = manifold->getNumContacts();
++			for (int contactIndex = 0; contactIndex < contactCount; ++contactIndex) {
++				++g_telemetry.contactPointsSeen;
++				const auto& point = manifold->getContactPoint(contactIndex);
++				const float depth = static_cast<float>(-point.getDistance());
++				if (!std::isfinite(depth) || depth <= 0.0F) {
++					++g_telemetry.nonPenetratingPoints;
++					continue;
++				}
++				const float appliedImpulse = static_cast<float>(point.m_appliedImpulse);
++
++				GTContactSampleV1 sample{};
++				sample.structSize = sizeof(sample);
++				sample.flags = GT_CONTACT_SAMPLE_BREAST_RELEVANT;
++				sample.substepIndex = currentSubstep;
++				sample.timeStep = substepTime;
++				sample.penetrationDepth = depth;
++				sample.normalImpulse = std::max(0.0F, appliedImpulse);
++				sample.endpointA = endpointA;
++				sample.endpointB = endpointB;
++
++				const btVector3 pointA = point.getPositionWorldOnA();
++				const btVector3 pointB = point.getPositionWorldOnB();
++				const btVector3 normalOnB = point.m_normalWorldOnB;
++				const btVector3 relativeVelocity =
++					PointVelocity(objectA, pointA) - PointVelocity(objectB, pointB);
++				const float normalLengthSquared = static_cast<float>(normalOnB.length2());
++				if (!std::isfinite(appliedImpulse) || !IsFiniteVector(pointA) ||
++					!IsFiniteVector(pointB) || !IsFiniteVector(normalOnB) ||
++					!IsFiniteVector(relativeVelocity) ||
++					!std::isfinite(normalLengthSquared) ||
++					normalLengthSquared <= std::numeric_limits<float>::epsilon()) {
++					++g_telemetry.invalidPhysicsPoints;
++					continue;
++				}
++				CopyVector(pointA, sample.pointOnA);
++				CopyVector(pointB, sample.pointOnB);
++				CopyVector(normalOnB, sample.normalOnB);
++				CopyVector(relativeVelocity, sample.relativeVelocityAminusB);
++				{
++					// Synchronize cache ownership with capture/target updates.  A target
++					// change makes the open old-epoch frame intentionally non-consumable.
++					std::scoped_lock lock(g_targetMutex);
++					if (!IsCaptureEnabled() ||
++						g_activeTargetGeneration != g_pendingTargetGeneration ||
++						g_currentFrameTargetGeneration != g_activeTargetGeneration) {
++						++g_telemetry.targetEpochDrops;
++						continue;
++					}
++					const auto addResult = g_collector.Add(sample);
++					RecordAddResult(addResult);
++					if (addResult != gt::contact::AddResult::invalidSample &&
++						addResult != gt::contact::AddResult::noOpenFrame) {
++						RecordContactSource(sample);
++						RecordContinuitySampleLocked(sample);
++					}
++				}
++			}
++		}
++	}
++
++	void EndFrame() noexcept
++	{
++		if (!g_frameOpen) {
++			return;
++		}
++		std::scoped_lock lock(g_targetMutex);
++		const bool substepAnomaly = FinalizeSubstepTelemetryLocked();
++		if (!substepAnomaly && IsCaptureEnabled() &&
++			g_activeTargetGeneration == g_pendingTargetGeneration) {
++			AddContinuitySamplesLocked();
++		} else {
++			ClearContinuityLocked();
++		}
++		if (g_collector.EndFrame()) {
++			++g_telemetry.framesPublished;
++		}
++		LogProducerTelemetryLocked(substepAnomaly);
++		g_frameOpen = false;
++	}
++}
++
++extern "C" __declspec(dllexport) const GTContactBridgeV1* GT_CONTACT_CALL
++GTFSMP_GetContactBridgeV1(
++	const std::uint32_t requestedAbiVersion,
++	const std::uint32_t callerBridgeStructSize)
++{
++	static const GTContactBridgeV1 bridge{
++		sizeof(GTContactBridgeV1),
++		GT_CONTACT_ABI_V1,
++		sizeof(GTContactFrameV1),
++		sizeof(GTContactSampleV1),
++		sizeof(GTContactEndpointV1),
++		0U,
++		&hdt::gtcontact::CopyLatestFrame,
++		&hdt::gtcontact::SetCaptureEnabled,
++		&hdt::gtcontact::SetTargetSkeletons,
++		{},
++	};
++	if (requestedAbiVersion != GT_CONTACT_ABI_V1 ||
++		callerBridgeStructSize != sizeof(GTContactBridgeV1)) {
++		return nullptr;
++	}
++	static std::atomic_bool loggedConnection{ false };
++	if (!loggedConnection.exchange(true, std::memory_order_relaxed)) {
++		logger::info(
++			"[GTContactBridge v0.8.4 producer] ABI v1 connected; corrected multi-substep "
++			"capture and source telemetry active");
++	}
++	return &bridge;
++}
++
+diff --git a/src/GTContactBridgeProducer.h b/src/GTContactBridgeProducer.h
+new file mode 100644
+index 0000000..e0173e1
+--- /dev/null
++++ b/src/GTContactBridgeProducer.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include <cstdint>
++
++class btDispatcher;
++class btVector3;
++
++namespace hdt::gtcontact
++{
++	[[nodiscard]] bool IsCaptureEnabled() noexcept;
++
++	void BeginFrame(
++		float frameTimeStep,
++		const btVector3& originOffset,
++		std::uint32_t substepCount) noexcept;
++
++	void CollectSolvedManifolds(btDispatcher* dispatcher, float substepTime) noexcept;
++	void EndFrame() noexcept;
++}
++
+diff --git a/src/GTContactFrameTiming.h b/src/GTContactFrameTiming.h
+new file mode 100644
+index 0000000..fbd9e4e
+--- /dev/null
++++ b/src/GTContactFrameTiming.h
+@@ -0,0 +1,46 @@
++#pragma once
++
++#include <cmath>
++#include <cstdint>
++#include <limits>
++
++namespace hdt::gtcontact
++{
++	// Keep this value shared with SkinnedMeshWorld::stepSimulation.  Contact
++	// frames must advertise the number of Bullet substeps that will actually be
++	// executed; otherwise every contact from substep 1+ is rejected by ABI v1.
++	inline constexpr float kMinimumSimulationPeriod = 1.0F / 300.0F;
++
++	[[nodiscard]] inline std::uint32_t CalculateSimulationSubstepCount(
++		const float totalTimeStep,
++		const float fixedTimeStep) noexcept
++	{
++		if (!std::isfinite(totalTimeStep) || !std::isfinite(fixedTimeStep) ||
++			totalTimeStep <= 0.0F || fixedTimeStep <= 0.0F) {
++			return 0U;
++		}
++
++		float remaining = totalTimeStep;
++		std::uint32_t count = 0U;
++		while (remaining > fixedTimeStep) {
++			if (count == std::numeric_limits<std::uint32_t>::max()) {
++				return count;
++			}
++			const float next = remaining - fixedTimeStep;
++			// Guard pathological floating-point inputs from making the counting
++			// loop non-progressing.  Normal FSMP input is bounded to maxSubSteps.
++			if (!(next < remaining)) {
++				return std::numeric_limits<std::uint32_t>::max();
++			}
++			remaining = next;
++			++count;
++		}
++
++		if (remaining > kMinimumSimulationPeriod &&
++			count != std::numeric_limits<std::uint32_t>::max()) {
++			++count;
++		}
++		return count;
++	}
++}
++
+diff --git a/src/GlobalConfig.cpp b/src/GlobalConfig.cpp
+index 84b3b85..98b18a6 100644
+--- a/src/GlobalConfig.cpp
++++ b/src/GlobalConfig.cpp
+@@ -106,6 +106,12 @@ namespace hdt
+ 		c.rotationSpeedLimit = clampv(read(smp, "rotationSpeedLimit", c.rotationSpeedLimit), 0.0f, 100.0f);
+ 		c.unclampedResets = read(smp, "unclampedResets", c.unclampedResets);
+ 		c.unclampedResetAngle = clampv(read(smp, "unclampedResetAngle", c.unclampedResetAngle), 0.0f, 360.0f);
++		c.guardDiscontinuities = read(smp, "guardDiscontinuities", c.guardDiscontinuities);
++		c.teleportSpeedLimit = clampv(read(smp, "teleportSpeedLimit", c.teleportSpeedLimit), 100.0f, 100000.0f);
++		c.teleportTurnLimit = clampv(read(smp, "teleportTurnLimit", c.teleportTurnLimit), 100.0f, 100000.0f);
++		c.poseSnapSpeedLimit = clampv(read(smp, "poseSnapSpeedLimit", c.poseSnapSpeedLimit), 100.0f, 100000.0f);
++		c.settleSpeedLimit = clampv(read(smp, "settleSpeedLimit", c.settleSpeedLimit), 1.0f, 100000.0f);
++		c.settleTimeLimit = clampv(read(smp, "settleTimeLimit", c.settleTimeLimit), 0.0f, 10.0f);
+ 		c.useRealTime = read(smp, "useRealTime", c.useRealTime);
+ 		c.minCullingDistance = clampv(read(smp, "minCullingDistance", c.minCullingDistance), 0.0f, 10000.0f);
+ 		c.autoAdjustMaxSkeletons = read(smp, "autoAdjustMaxSkeletons", c.autoAdjustMaxSkeletons);
+@@ -176,6 +182,18 @@ namespace hdt
+ 		w.Bool(c.unclampedResets);
+ 		w.Key("unclampedResetAngle");
+ 		w.Double(c.unclampedResetAngle);
++		w.Key("guardDiscontinuities");
++		w.Bool(c.guardDiscontinuities);
++		w.Key("teleportSpeedLimit");
++		w.Double(c.teleportSpeedLimit);
++		w.Key("teleportTurnLimit");
++		w.Double(c.teleportTurnLimit);
++		w.Key("poseSnapSpeedLimit");
++		w.Double(c.poseSnapSpeedLimit);
++		w.Key("settleSpeedLimit");
++		w.Double(c.settleSpeedLimit);
++		w.Key("settleTimeLimit");
++		w.Double(c.settleTimeLimit);
+ 		w.Key("useRealTime");
+ 		w.Bool(c.useRealTime);
+ 		w.Key("minCullingDistance");
+diff --git a/src/GlobalConfig.h b/src/GlobalConfig.h
+index 4ed7823..a3e63e9 100644
+--- a/src/GlobalConfig.h
++++ b/src/GlobalConfig.h
+@@ -29,6 +29,13 @@ namespace hdt
+ 		float rotationSpeedLimit = 10.0f;
+ 		bool unclampedResets = true;
+ 		float unclampedResetAngle = 120.0f;
++		// Discontinuity guard (teleports, placements after loading, swapped poses); see hdtDiscontinuityGuard.h.
++		bool guardDiscontinuities = true;
++		float teleportSpeedLimit = 1500.0f;
++		float teleportTurnLimit = 2000.0f;
++		float poseSnapSpeedLimit = 1200.0f;
++		float settleSpeedLimit = 100.0f;
++		float settleTimeLimit = 1.5f;
+ 		bool useRealTime = false;
+ 		float minCullingDistance = 500.0f;
+ 		bool autoAdjustMaxSkeletons = true;
+diff --git a/src/PluginAPI.h b/src/PluginAPI.h
+index e393683..fc830fe 100644
+--- a/src/PluginAPI.h
++++ b/src/PluginAPI.h
+@@ -1,8 +1,12 @@
+ #pragma once
+ 
++#include "PluginOwnerAPI.h"
++
+ /*Plugins should register for messages from hdtSMP64 via SKSE during SKSE's PostLoad event.
+ * When ready, hdtSMP64 will send a message of type MSG_STARTUP containing a PluginInterface* as data.
+ *
++* Plugin authors need both this header and PluginOwnerAPI.h.
++*
+ * A plugin MUST verify compatibility with the interface version before calling any other functions.
+ * The interface version is semantic, meaning that
+ *	- any incompatible API change increments the MAJOR version
+@@ -42,6 +46,21 @@ namespace hdt
+ 	using IPreStepListener = RE::BSTEventSink<PreStepEvent>;
+ 	using IPostStepListener = RE::BSTEventSink<PostStepEvent>;
+ 
++	//Sent on the main thread right after the engine update; hdtSMP64 launches its simulation from this event.
++	struct PluginFrameEvent
++	{
++		bool gamePaused{ false };
++	};
++
++	//Sent on the main thread after hdtSMP64 has joined its simulation and written its own bone transforms,
++	//before skinning. Plugin listeners run after hdtSMP64's own handler.
++	struct PluginFrameSyncEvent
++	{
++	};
++
++	using IFrameListener = RE::BSTEventSink<PluginFrameEvent>;
++	using IFrameSyncListener = RE::BSTEventSink<PluginFrameSyncEvent>;
++
+ 	class PluginInterface
+ 	{
+ 	public:
+@@ -64,7 +83,7 @@ namespace hdt
+ 		};
+ 
+ 	public:
+-		constexpr static Version INTERFACE_VERSION{ 2, 0, 0 };
++		constexpr static Version INTERFACE_VERSION{ 2, 2, 0 };
+ 		constexpr static Version BULLET_VERSION{ 3, 24, 0 };
+ 
+ 	public:
+@@ -77,5 +96,30 @@ namespace hdt
+ 
+ 		virtual void addListener(IPostStepListener*) = 0;
+ 		virtual void removeListener(IPostStepListener*) = 0;
++
++		// @brief Registers an owner that is asked to take over simulation of specific meshes, ordered by
++		// MeshOwnerInfo::priority and then by registration order. Ignores null and already registered owners.
++		virtual void addMeshOwner(IMeshOwner*, const MeshOwnerInfo&) = 0;
++
++		// @brief Unregisters an owner. Call it from the game main thread, never concurrently with an owner callback.
++		// Its claims end without release callbacks and hdtSMP64 simulates those meshes itself from the next rebuild.
++		virtual void removeMeshOwner(IMeshOwner*) = 0;
++
++		// @brief Hands a claimed mesh back, for example after the owner lost its GPU device. hdtSMP64 rebuilds the
++		// claim's actor on the main thread and simulates the mesh itself, and does not ask this owner about that
++		// mesh and actor again during that rebuild. Later rebuilds ask it again. Safe to call from any thread;
++		// ignored if the token is not a live claim of this owner. The owner gets no release call for the token.
++		virtual void relinquishMesh(IMeshOwner*, std::uint64_t claimToken) = 0;
++
++		// @brief Re-runs the soft reload for an actor, so every one of its meshes asks the mesh owners again.
++		virtual void reloadActorPhysics(RE::Actor*) = 0;
++
++		// @brief Registers a listener for PluginFrameEvent. Listeners run in registration order.
++		virtual void addFrameListener(IFrameListener*) = 0;
++		virtual void removeFrameListener(IFrameListener*) = 0;
++
++		// @brief Registers a listener for PluginFrameSyncEvent. Listeners run in registration order.
++		virtual void addFrameSyncListener(IFrameSyncListener*) = 0;
++		virtual void removeFrameSyncListener(IFrameSyncListener*) = 0;
+ 	};
+ }
+diff --git a/src/PluginInterfaceImpl.cpp b/src/PluginInterfaceImpl.cpp
+index 4086950..6bc2ce3 100644
+--- a/src/PluginInterfaceImpl.cpp
++++ b/src/PluginInterfaceImpl.cpp
+@@ -1,5 +1,7 @@
+ #include "PluginInterfaceImpl.h"
+ #include "hdtWorldCollider.h"
++#include "ExternalOwner.h"
++#include "dhdtPapyrusFunctions.h"
+ 
+ hdt::PluginInterfaceImpl hdt::g_pluginInterface;
+ 
+@@ -31,6 +33,92 @@ void hdt::PluginInterfaceImpl::removeListener(IPostStepListener* l)
+ 	}
+ }
+ 
++void hdt::PluginInterfaceImpl::addMeshOwner(IMeshOwner* owner, const MeshOwnerInfo& info)
++{
++	ExternalOwnerRegistry::instance().addOwner(owner, info);
++}
++
++void hdt::PluginInterfaceImpl::removeMeshOwner(IMeshOwner* owner)
++{
++	ExternalOwnerRegistry::instance().removeOwner(owner);
++}
++
++void hdt::PluginInterfaceImpl::relinquishMesh(IMeshOwner* owner, std::uint64_t claimToken)
++{
++	const auto relinquished = ExternalOwnerRegistry::instance().relinquish(owner, claimToken);
++	if (!relinquished || relinquished->actorFormId == 0) {
++		return;
++	}
++
++	SKSE::GetTaskInterface()->AddTask([formId = relinquished->actorFormId] {
++		auto& registry = ExternalOwnerRegistry::instance();
++		registry.beginRelinquishedReload(formId);
++		if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(formId)) {
++			papyrus::impl::ResetPhysicsImpl(actor, false);
++		}
++		registry.endRelinquishedReload(formId);
++	});
++}
++
++void hdt::PluginInterfaceImpl::reloadActorPhysics(RE::Actor* actor)
++{
++	if (!actor) {
++		return;
++	}
++
++	SKSE::GetTaskInterface()->AddTask([handle = RE::ActorHandle(actor)] {
++		if (auto a = handle.get()) {
++			papyrus::impl::ResetPhysicsImpl(a.get(), false);
++		}
++	});
++}
++
++void hdt::PluginInterfaceImpl::addFrameListener(IFrameListener* l)
++{
++	if (l) {
++		m_frameDispatcher.AddEventSink(l);
++	}
++}
++
++void hdt::PluginInterfaceImpl::removeFrameListener(IFrameListener* l)
++{
++	if (l) {
++		m_frameDispatcher.RemoveEventSink(l);
++	}
++}
++
++void hdt::PluginInterfaceImpl::addFrameSyncListener(IFrameSyncListener* l)
++{
++	if (l) {
++		m_frameSyncDispatcher.AddEventSink(l);
++	}
++}
++
++void hdt::PluginInterfaceImpl::removeFrameSyncListener(IFrameSyncListener* l)
++{
++	if (l) {
++		m_frameSyncDispatcher.RemoveEventSink(l);
++	}
++}
++
++RE::BSEventNotifyControl hdt::PluginInterfaceImpl::ProcessEvent(const Events::FrameEvent* e, RE::BSTEventSource<Events::FrameEvent>*)
++{
++	if (e) {
++		const PluginFrameEvent event{ e->gamePaused };
++		m_frameDispatcher.SendEvent(std::addressof(event));
++	}
++
++	return RE::BSEventNotifyControl::kContinue;
++}
++
++RE::BSEventNotifyControl hdt::PluginInterfaceImpl::ProcessEvent(const Events::FrameSyncEvent*, RE::BSTEventSource<Events::FrameSyncEvent>*)
++{
++	const PluginFrameSyncEvent event;
++	m_frameSyncDispatcher.SendEvent(std::addressof(event));
++
++	return RE::BSEventNotifyControl::kContinue;
++}
++
+ void hdt::PluginInterfaceImpl::onPostPostLoad()
+ {
+ 	// Send ourselves to any plugin that registered during the PostLoad event
+diff --git a/src/PluginInterfaceImpl.h b/src/PluginInterfaceImpl.h
+index 542e6e9..f21f89c 100644
+--- a/src/PluginInterfaceImpl.h
++++ b/src/PluginInterfaceImpl.h
+@@ -1,10 +1,14 @@
+ #pragma once
+ 
++#include "Events.h"
+ #include "PluginAPI.h"
+ 
+ namespace hdt
+ {
+-	class PluginInterfaceImpl final : public PluginInterface
++	class PluginInterfaceImpl final :
++		public PluginInterface,
++		public RE::BSTEventSink<Events::FrameEvent>,
++		public RE::BSTEventSink<Events::FrameSyncEvent>
+ 	{
+ 	public:
+ 		PluginInterfaceImpl() = default;
+@@ -21,6 +25,21 @@ namespace hdt
+ 		virtual void addListener(IPostStepListener* l) override;
+ 		virtual void removeListener(IPostStepListener* l) override;
+ 
++		virtual void addMeshOwner(IMeshOwner* owner, const MeshOwnerInfo& info) override;
++		virtual void removeMeshOwner(IMeshOwner* owner) override;
++		virtual void relinquishMesh(IMeshOwner* owner, std::uint64_t claimToken) override;
++
++		virtual void reloadActorPhysics(RE::Actor* actor) override;
++
++		virtual void addFrameListener(IFrameListener* l) override;
++		virtual void removeFrameListener(IFrameListener* l) override;
++
++		virtual void addFrameSyncListener(IFrameSyncListener* l) override;
++		virtual void removeFrameSyncListener(IFrameSyncListener* l) override;
++
++		virtual RE::BSEventNotifyControl ProcessEvent(const Events::FrameEvent*, RE::BSTEventSource<Events::FrameEvent>*) override;
++		virtual RE::BSEventNotifyControl ProcessEvent(const Events::FrameSyncEvent*, RE::BSTEventSource<Events::FrameSyncEvent>*) override;
++
+ 		void onPostPostLoad();
+ 
+ 		void onPreStep(const PreStepEvent& e) { m_preStepDispatcher.SendEvent(std::addressof(e)); }
+@@ -32,6 +51,8 @@ namespace hdt
+ 		VersionInfo m_versionInfo{ INTERFACE_VERSION, BULLET_VERSION };
+ 		RE::BSTEventSource<PreStepEvent> m_preStepDispatcher;
+ 		RE::BSTEventSource<PostStepEvent> m_postStepDispatcher;
++		RE::BSTEventSource<PluginFrameEvent> m_frameDispatcher;
++		RE::BSTEventSource<PluginFrameSyncEvent> m_frameSyncDispatcher;
+ 
+ 		SKSE::PluginHandle m_sksePluginHandle;
+ 		SKSE::MessagingInterface* m_skseMessagingInterface;
+diff --git a/src/PluginOwnerAPI.h b/src/PluginOwnerAPI.h
+new file mode 100644
+index 0000000..1586e31
+--- /dev/null
++++ b/src/PluginOwnerAPI.h
+@@ -0,0 +1,80 @@
++#pragma once
++
++#include <cstdint>
++
++namespace RE
++{
++	class Actor;
++	class NiNode;
++	class NiAVObject;
++}
++
++namespace hdt
++{
++	// @brief Which kind of mesh an IMeshClaimContext describes.
++	enum class MeshKind : std::uint8_t
++	{
++		Armor,
++		HeadPart
++	};
++
++	// @brief Read-only description of one mesh hdtSMP64 is about to simulate, handed to IMeshOwner::claim.
++	// @details The context and every pointer obtained from it are valid only for the duration of the claim call.
++	// Copy any string, and take your own reference to any node, that you need to keep.
++	class IMeshClaimContext
++	{
++	public:
++		virtual ~IMeshClaimContext() = default;
++
++		virtual MeshKind getKind() const = 0;
++
++		// @brief SMP XML path of the mesh.
++		virtual const char* getPhysicsFile() const = 0;
++
++		// @brief May be null.
++		virtual RE::Actor* getActor() const = 0;
++
++		// @brief The NPC node the bones were merged into.
++		virtual RE::NiNode* getSkeleton() const = 0;
++
++		virtual RE::NiAVObject* getModel() const = 0;
++
++		// @brief Nullptr if the bone was not renamed.
++		virtual const char* getMergedBoneName(const char* originalName) const = 0;
++	};
++
++	// @brief Identity and ordering of one mesh owner, given to PluginInterface::addMeshOwner.
++	// @details hdtSMP64 copies the name, so it only has to stay valid for the call.
++	struct MeshOwnerInfo
++	{
++		// @brief Stable identifier shown in hdtSMP64's log. A null or empty name is logged as "unnamed".
++		const char* name = nullptr;
++
++		// @brief Owners with a higher priority are asked first. Owners with equal priority are asked in
++		// registration order, which follows SKSE plugin load order.
++		std::int32_t priority = 0;
++	};
++
++	// @brief Implemented by a plugin that takes over simulation of specific hdtSMP64 meshes.
++	// @details Several owners may be registered. For each mesh hdtSMP64 is about to simulate it asks them in
++	// priority order and the first one whose claim returns true wins; if none does, hdtSMP64 simulates the mesh
++	// itself. A claim is sticky: it holds until release, an actor reload, or PluginInterface::relinquishMesh, so
++	// a later or higher-priority owner never takes a mesh away mid-session. It is asked again the next time the
++	// mesh is created.
++	// claim and release run on the game main thread or the Papyrus VM thread, serialized by hdtSMP64's
++	// actor manager lock. Implementations must not throw and must not call back into hdtSMP64 except to register
++	// or unregister owners, or to relinquish a mesh.
++	class IMeshOwner
++	{
++	public:
++		virtual ~IMeshOwner() = default;
++
++		// @brief Returning true takes ownership of the described mesh; hdtSMP64 then creates no system for it.
++		// @param claimToken Identifies this claim and is passed to the matching release.
++		virtual bool claim(const IMeshClaimContext& context, std::uint64_t claimToken) = 0;
++
++		// @brief hdtSMP64 is done with the claim (the mesh was rebuilt, its actor unloaded, or physics reset).
++		// Not called for a claim the owner gave back with relinquishMesh, nor after the owner was removed.
++		virtual void release(std::uint64_t claimToken) = 0;
++	};
++}
+diff --git a/src/config.cpp b/src/config.cpp
+index f64d69b..c8ae0d5 100644
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -68,6 +68,12 @@ namespace hdt
+ 		w->m_rotationSpeedLimit = c.rotationSpeedLimit;
+ 		w->m_unclampedResets = c.unclampedResets;
+ 		w->m_unclampedResetAngle = c.unclampedResetAngle;
++		GetDiscontinuitySettings().enabled = c.guardDiscontinuities;
++		GetDiscontinuitySettings().teleportSpeedLimit = c.teleportSpeedLimit;
++		GetDiscontinuitySettings().teleportTurnLimit = c.teleportTurnLimit;
++		GetDiscontinuitySettings().poseSnapSpeedLimit = c.poseSnapSpeedLimit;
++		GetDiscontinuitySettings().settleSpeedLimit = c.settleSpeedLimit;
++		GetDiscontinuitySettings().settleTimeLimit = c.settleTimeLimit;
+ 		w->m_budgetMs = c.budgetMs;
+ 		w->m_useRealTime = c.useRealTime;
+ 		w->m_sampleSize = c.sampleSize;
+@@ -118,6 +124,12 @@ namespace hdt
+ 		c.rotationSpeedLimit = w->m_rotationSpeedLimit;
+ 		c.unclampedResets = w->m_unclampedResets;
+ 		c.unclampedResetAngle = w->m_unclampedResetAngle;
++		c.guardDiscontinuities = GetDiscontinuitySettings().enabled;
++		c.teleportSpeedLimit = GetDiscontinuitySettings().teleportSpeedLimit;
++		c.teleportTurnLimit = GetDiscontinuitySettings().teleportTurnLimit;
++		c.poseSnapSpeedLimit = GetDiscontinuitySettings().poseSnapSpeedLimit;
++		c.settleSpeedLimit = GetDiscontinuitySettings().settleSpeedLimit;
++		c.settleTimeLimit = GetDiscontinuitySettings().settleTimeLimit;
+ 		c.budgetMs = w->m_budgetMs;
+ 		c.useRealTime = w->m_useRealTime;
+ 		c.sampleSize = w->m_sampleSize;
+@@ -216,6 +228,12 @@ namespace hdt
+ 		LOG("smp.rotationSpeedLimit", w->m_rotationSpeedLimit);
+ 		LOG("smp.unclampedResets", w->m_unclampedResets);
+ 		LOG("smp.unclampedResetAngle", w->m_unclampedResetAngle);
++		LOG("smp.guardDiscontinuities", GetDiscontinuitySettings().enabled);
++		LOG("smp.teleportSpeedLimit", GetDiscontinuitySettings().teleportSpeedLimit);
++		LOG("smp.teleportTurnLimit", GetDiscontinuitySettings().teleportTurnLimit);
++		LOG("smp.poseSnapSpeedLimit", GetDiscontinuitySettings().poseSnapSpeedLimit);
++		LOG("smp.settleSpeedLimit", GetDiscontinuitySettings().settleSpeedLimit);
++		LOG("smp.settleTimeLimit", GetDiscontinuitySettings().settleTimeLimit);
+ 		LOG("smp.budgetMS", w->m_budgetMs);
+ 		LOG("smp.useRealTime", w->m_useRealTime);
+ 		LOG("smp.minCullingDistance", a->m_minCullingDistance);
+diff --git a/src/dhdtPapyrusFunctions.cpp b/src/dhdtPapyrusFunctions.cpp
+index 3648e63..037fe67 100644
+--- a/src/dhdtPapyrusFunctions.cpp
++++ b/src/dhdtPapyrusFunctions.cpp
+@@ -176,8 +176,6 @@ void hdt::papyrus::impl::ResetPhysicsImpl(RE::Actor* actor, bool full)
+ 		} else {
+ 			skeleton.softReloadMeshes();
+ 		}
+-
+-		break;
+ 	}
+ }
+ 
+@@ -287,7 +285,7 @@ bool hdt::papyrus::impl::ReloadPhysicsFileImpl(uint32_t on_actor_formID, uint32_
+ 
+ 					RE::BSTSmartPointer<SkyrimSystem> system;
+ 
+-					system = SkyrimSystemCreator().createOrUpdateSystem(skeleton.npc.get(), armor.armorWorn.get(), &armor.physicsFile, std::move(renameMap), oldSystem.get());
++					system = armor.createSystem(MeshKind::Armor, skeleton.npc.get(), armor.armorWorn.get(), std::move(renameMap), oldSystem.get());
+ 
+ 					if (system) {
+ 						system->block_resetting = true;
+@@ -391,7 +389,7 @@ bool hdt::papyrus::impl::SwapPhysicsFileImpl(uint32_t on_actor_formID, std::stri
+ 					}
+ 
+ 					auto renameMap = armor.renameMap;
+-					RE::BSTSmartPointer<SkyrimSystem> system = SkyrimSystemCreator().createOrUpdateSystem(skeleton.npc.get(), armor.armorWorn.get(), &armor.physicsFile, std::move(renameMap), oldSystem.get());
++					RE::BSTSmartPointer<SkyrimSystem> system = armor.createSystem(MeshKind::Armor, skeleton.npc.get(), armor.armorWorn.get(), std::move(renameMap), oldSystem.get());
+ 
+ 					if (system) {
+ 						system->block_resetting = true;
+diff --git a/src/hdtDiscontinuityGuard.cpp b/src/hdtDiscontinuityGuard.cpp
+new file mode 100644
+index 0000000..db36229
+--- /dev/null
++++ b/src/hdtDiscontinuityGuard.cpp
+@@ -0,0 +1,129 @@
++#include "hdtDiscontinuityGuard.h"
++
++#include "hdtSkyrimBone.h"
++
++#include <mutex>
++#include <unordered_map>
++
++namespace hdt
++{
++	namespace
++	{
++		// A settling system is released once its pose has stayed calm for this long, so that a pose
++		// change which starts a moment after the system was built is still waited for.
++		constexpr float kCalmTime = 0.25f;
++	}
++
++	DiscontinuitySettings& GetDiscontinuitySettings()
++	{
++		static DiscontinuitySettings settings;
++		return settings;
++	}
++
++	DiscontinuityGuard& GetDiscontinuityGuard(const void* owner)
++	{
++		// Node-based map: references stay valid when other systems are added.
++		static std::mutex mutex;
++		static std::unordered_map<const void*, DiscontinuityGuard> guards;
++		std::lock_guard lock(mutex);
++		return guards[owner];
++	}
++
++	void DiscontinuityGuard::restart(const btTransform& root)
++	{
++		m_lastRoot = root;
++		m_tracking = true;
++	}
++
++	void DiscontinuityGuard::settle()
++	{
++		m_settling = true;
++		m_heldFor = 0.0f;
++		m_calmFor = 0.0f;
++	}
++
++	DiscontinuityGuard::Finding DiscontinuityGuard::inspect(const Bones& bones, const btTransform& root, float timeStep, const DiscontinuitySettings& settings)
++	{
++		Finding finding;
++
++		if (!settings.enabled) {
++			m_settling = false;
++		}
++		if (!m_tracking || !settings.enabled || timeStep <= FLT_EPSILON) {
++			restart(root);
++			return finding;
++		}
++
++		// Rigid motion of the root since the previous read.
++		const btTransform delta = root * m_lastRoot.inverse();
++		const btVector3 shift = root.getOrigin() - m_lastRoot.getOrigin();
++		m_lastRoot = root;
++
++		finding.rootSpeed = shift.length() / timeStep;
++		finding.turnSpeed = btDegrees(delta.getRotation().getAngleShortestPath()) / timeStep;
++
++		// What is left of each animated bone's motion once the root motion is taken out.
++		const float snapDistance = settings.poseSnapSpeedLimit * timeStep;
++		const float snapDistance2 = snapDistance * snapDistance;
++		float farthest2 = 0.0f;
++		for (const auto& bone : bones) {
++			if (!bone->m_rig.isStaticOrKinematicObject()) {
++				continue;
++			}
++
++			++finding.animatedBones;
++			const auto target = static_cast<const SkyrimBone*>(bone.get())->animatedRigOrigin();
++			const auto carried = delta * bone->m_rig.getWorldTransform().getOrigin();
++			const float moved2 = (target - carried).length2();
++			farthest2 = std::max(farthest2, moved2);
++			if (moved2 > snapDistance2) {
++				++finding.snappedBones;
++			}
++		}
++		finding.poseSpeed = std::sqrt(farthest2) / timeStep;
++
++		if (m_settling) {
++			m_heldFor += timeStep;
++			m_calmFor = finding.poseSpeed <= settings.settleSpeedLimit ? m_calmFor + timeStep : 0.0f;
++			finding.heldFor = m_heldFor;
++
++			if (m_calmFor < kCalmTime && m_heldFor < settings.settleTimeLimit) {
++				finding.action = Action::kHold;
++			} else {
++				m_settling = false;
++				finding.released = true;
++			}
++			return finding;
++		}
++
++		if (finding.snappedBones > 0 && finding.snappedBones * 2 >= finding.animatedBones) {
++			finding.action = Action::kRestart;
++		} else if (finding.rootSpeed > settings.teleportSpeedLimit || finding.turnSpeed > settings.teleportTurnLimit) {
++			carry(bones, delta);
++			finding.action = Action::kCarried;
++		}
++
++		return finding;
++	}
++
++	void DiscontinuityGuard::carry(const Bones& bones, const btTransform& delta)
++	{
++		const auto& turn = delta.getBasis();
++		for (const auto& bone : bones) {
++			auto& rig = bone->m_rig;
++			const btTransform moved = delta * rig.getWorldTransform();
++			rig.setWorldTransform(moved);
++			rig.setInterpolationWorldTransform(moved);
++
++			// Animated bones get their velocity from the read that follows.
++			if (!rig.isStaticOrKinematicObject()) {
++				const btVector3 linear = turn * rig.getLinearVelocity();
++				const btVector3 angular = turn * rig.getAngularVelocity();
++				rig.setLinearVelocity(linear);
++				rig.setAngularVelocity(angular);
++				rig.setInterpolationLinearVelocity(linear);
++				rig.setInterpolationAngularVelocity(angular);
++			}
++		}
++	}
++}
+diff --git a/src/hdtDiscontinuityGuard.h b/src/hdtDiscontinuityGuard.h
+new file mode 100644
+index 0000000..ead5604
+--- /dev/null
++++ b/src/hdtDiscontinuityGuard.h
+@@ -0,0 +1,84 @@
++#pragma once
++
++#include "hdtSkinnedMesh/hdtBulletHelper.h"
++#include "hdtSkinnedMesh/hdtSkinnedMeshBone.h"
++
++namespace hdt
++{
++	// Limits above which the motion of a skeleton between two physics reads is not something the
++	// simulation can follow. Speeds are measured against the simulated time of the step, which is what
++	// the solver sees: a long frame squeezed into maxSubSteps ticks counts as fast motion.
++	struct DiscontinuitySettings
++	{
++		bool enabled = true;
++		// Skyrim units per second of the skeleton root. Above it the actor was teleported (or a long
++		// frame was compressed), and the bodies are carried along instead of being dragged.
++		float teleportSpeedLimit = 1500.0f;
++		// Degrees per second of the skeleton root, same treatment.
++		float teleportTurnLimit = 2000.0f;
++		// Skyrim units per second of an animated bone relative to the root. When half of the animated
++		// bones exceed it, the pose was swapped and the system restarts from its rest shape.
++		float poseSnapSpeedLimit = 1200.0f;
++		// A system that was just built (outfit equipped, actor loaded) starts in its rest shape, which
++		// only fits a body that is not in the middle of a pose change. It is kept at rest until no
++		// animated bone moves faster than this relative to the root (Skyrim units per second)...
++		float settleSpeedLimit = 100.0f;
++		// ...or until this many seconds have passed, for actors that never stand still.
++		float settleTimeLimit = 1.5f;
++	};
++
++	// Watches one system's skeleton root and animated bones from read to read. The simulation turns
++	// every change of an animated bone into a velocity; a teleport, a placement after a loading screen or
++	// a swapped pose would become a sweep of the body through its own cloth, which then stays on the
++	// wrong side. The guard removes such a jump before the bones are read, and keeps a new system at
++	// rest while the body is still moving into its pose.
++	class DiscontinuityGuard
++	{
++	public:
++		enum class Action
++		{
++			kNone,
++			kCarried,  // bodies were moved rigidly with the root; simulation state is kept
++			kRestart,  // the caller must reset the system
++			kHold      // still settling: the caller must reset the system
++		};
++
++		struct Finding
++		{
++			Action action = Action::kNone;
++			float rootSpeed = 0.0f;  // units per second
++			float turnSpeed = 0.0f;  // degrees per second
++			float poseSpeed = 0.0f;  // fastest animated bone relative to the root, units per second
++			int snappedBones = 0;
++			int animatedBones = 0;
++			bool released = false;  // settling ended with this read
++			float heldFor = 0.0f;   // seconds spent settling, valid with kHold or released
++		};
++
++		using Bones = std::vector<RE::BSTSmartPointer<SkinnedMeshBone>>;
++
++		// Forgets the previous read: the next one is compared against `root`.
++		void restart(const btTransform& root);
++
++		// The system was just built or attached to another scene graph: hold it at rest until its pose
++		// has settled.
++		void settle();
++
++		// Compares this read against the previous one and carries the bodies along if the root jumped.
++		Finding inspect(const Bones& bones, const btTransform& root, float timeStep, const DiscontinuitySettings& settings);
++
++	private:
++		static void carry(const Bones& bones, const btTransform& delta);
++
++		btTransform m_lastRoot = btTransform::getIdentity();
++		bool m_tracking = false;
++		bool m_settling = false;
++		float m_heldFor = 0.0f;
++		float m_calmFor = 0.0f;
++	};
++	// Layout-preserving storage. Other plugins (Banner Physics) verify the exact size and field offsets of
++	// hdt::SkyrimSystem and hdt::SkyrimPhysicsWorld from the PDB, so the guard state is kept outside those
++	// classes instead of as members.
++	DiscontinuitySettings& GetDiscontinuitySettings();
++	DiscontinuityGuard& GetDiscontinuityGuard(const void* owner);
++}
+diff --git a/src/hdtSkinnedMesh/hdtSkinnedMeshWorld.cpp b/src/hdtSkinnedMesh/hdtSkinnedMeshWorld.cpp
+index 3384ac8..efb6547 100644
+--- a/src/hdtSkinnedMesh/hdtSkinnedMeshWorld.cpp
++++ b/src/hdtSkinnedMesh/hdtSkinnedMeshWorld.cpp
+@@ -1,4 +1,7 @@
+ #include "hdtSkinnedMeshWorld.h"
++
++#include "GTContactBridgeProducer.h"
++#include "GTContactFrameTiming.h"
+ #include "hdtBoneScaleConstraint.h"
+ #include "hdtDispatcher.h"
+ #include "hdtSkinnedMeshAlgorithm.h"
+@@ -164,8 +167,7 @@ namespace hdt
+ 		// Because Bullet's constraint solvers (ERP/CFM) are sensitive to delta-time,
+ 		// this variable tick can cause constraints to behave a bit differently
+ 		// (appearing more stiff or damping differently at various framerates).
+-		constexpr auto minPossiblePeriod = 1.0f / 300.0f;
+-		if (remainingTimeStep > minPossiblePeriod)
++		if (remainingTimeStep > gtcontact::kMinimumSimulationPeriod)
+ 			internalSingleStepSimulation(remainingTimeStep);
+ 		clearForces();
+ 
+@@ -436,6 +438,7 @@ namespace hdt
+ 		}
+ 
+ 		btDiscreteDynamicsWorldMt::solveConstraints(solverInfo);
++		gtcontact::CollectSolvedManifolds(m_dispatcher1, solverInfo.m_timeStep);
+ 
+ 		// the HDT manifolds are still recreated every frame, clear to prevent stale data.
+ 		static_cast<CollisionDispatcher*>(m_dispatcher1)->clearAllManifold();
+diff --git a/src/hdtSkyrimBone.cpp b/src/hdtSkyrimBone.cpp
+index 1141099..61a137c 100644
+--- a/src/hdtSkyrimBone.cpp
++++ b/src/hdtSkyrimBone.cpp
+@@ -89,6 +89,11 @@ namespace hdt
+ 		//}
+ 	}
+ 
++	btVector3 SkyrimBone::animatedRigOrigin() const
++	{
++		return convertNi(m_node->world).asTransform() * m_localToRig.getOrigin();
++	}
++
+ 	void SkyrimBone::writeTransform()
+ 	{
+ 		//if (m_rig.isStaticOrKinematicObject()) return;
+diff --git a/src/hdtSkyrimBone.h b/src/hdtSkyrimBone.h
+index 11b9835..6cfe06f 100644
+--- a/src/hdtSkyrimBone.h
++++ b/src/hdtSkyrimBone.h
+@@ -13,6 +13,9 @@ namespace hdt
+ 		void readTransform(float timeStep) override;
+ 		void writeTransform() override;
+ 
++		// Where the game's animation currently puts this bone's rigid body, in world space.
++		btVector3 animatedRigOrigin() const;
++
+ 		int m_depth;
+ 		RE::NiPointer<RE::NiNode> m_node;
+ 		RE::NiPointer<RE::NiNode> m_skeleton;
+diff --git a/src/hdtSkyrimPhysicsWorld.cpp b/src/hdtSkyrimPhysicsWorld.cpp
+index eb182f1..23b4d71 100644
+--- a/src/hdtSkyrimPhysicsWorld.cpp
++++ b/src/hdtSkyrimPhysicsWorld.cpp
+@@ -1,4 +1,6 @@
+ #include "hdtSkyrimPhysicsWorld.h"
++#include "GTContactBridgeProducer.h"
++#include "GTContactFrameTiming.h"
+ #include "PluginInterfaceImpl.h"
+ #include "WeatherManager.h"
+ #include "hdtPhysicsProfiler.h"
+@@ -153,8 +155,19 @@ namespace hdt
+ 			BT_PROFILE("HDTSMP_doUpdate2ndStep");
+ 			updateActiveState();
+ 			auto offset = applyTranslationOffset();
++			const auto contactSubstepCount =
++				gtcontact::CalculateSimulationSubstepCount(remainingTimeStep, tick);
++			if (contactSubstepCount != 0U) {
++				gtcontact::BeginFrame(
++					remainingTimeStep,
++					offset,
++					contactSubstepCount);
++			}
+ 			stepSimulation(remainingTimeStep, 0, tick);
+ 			restoreTranslationOffset(offset);
++			if (contactSubstepCount != 0U) {
++				gtcontact::EndFrame();
++			}
+ 			m_accumulatedInterval = 0;
+ 			m_pendingTransformUpdate = true;
+ 		}
+diff --git a/src/hdtSkyrimPhysicsWorld.h b/src/hdtSkyrimPhysicsWorld.h
+index 57b1c4c..15bcd1f 100644
+--- a/src/hdtSkyrimPhysicsWorld.h
++++ b/src/hdtSkyrimPhysicsWorld.h
+@@ -2,6 +2,7 @@
+ 
+ #include "ActorManager.h"
+ #include "Events.h"
++#include "hdtDiscontinuityGuard.h"
+ #include "hdtSkinnedMesh/hdtSkinnedMeshWorld.h"
+ #include "hdtSkyrimSystem.h"
+ 
+diff --git a/src/hdtSkyrimSystem.cpp b/src/hdtSkyrimSystem.cpp
+index 244e474..dc62689 100644
+--- a/src/hdtSkyrimSystem.cpp
++++ b/src/hdtSkyrimSystem.cpp
+@@ -45,6 +45,10 @@ static void __float32(float* __restrict out, const uint16_t in)
+ 
+ namespace hdt
+ {
++	// Banner Physics reads hdt::SkyrimSystem from the PDB and only accepts the stock size. Keep guard / seat state out
++	// of the class (see hdtDiscontinuityGuard.h); this fails the build instead of silently disabling Banner Physics.
++	static_assert(sizeof(SkyrimSystem) == 192, "hdt::SkyrimSystem changed size: Banner Physics will reject this FSMP build");
++
+ 	static constexpr float PI = 3.1415926535897932384626433832795f;
+ 
+ 	btEmptyShape SkyrimSystemCreator::BoneTemplate::emptyShape[1];
+@@ -95,6 +99,9 @@ namespace hdt
+ 			newRoot = newRoot->parent;
+ 		}
+ 
++		// Built just now, or attached to another scene graph (cell change, 3D reload).
++		const bool fresh = !m_initialized || m_oldRoot != newRoot;
++
+ 		if (m_oldRoot != newRoot) {
+ 			timeStep = RESET_PHYSICS;
+ 		}
+@@ -153,10 +160,69 @@ namespace hdt
+ 			}
+ 		}
+ 
++		if (timeStep > RESET_PHYSICS && !this->block_resetting) {
++			timeStep = absorbDiscontinuity(timeStep);
++		} else {
++			GetDiscontinuityGuard(this).restart(rootTransform());
++		}
++
++		if (fresh && GetDiscontinuitySettings().enabled) {
++			GetDiscontinuityGuard(this).settle();
++			logger::debug("physics on {} ({} bones) started, held at rest until the pose settles", ownerName(), m_bones.size());
++		}
++
+ 		m_oldRoot = hdt::make_nismart(newRoot);
+ 		return timeStep;
+ 	}
+ 
++	btTransform SkyrimSystem::rootTransform() const
++	{
++		return btTransform(convertNi(m_skeleton->world.rotate), convertNi(m_skeleton->world.translate));
++	}
++
++	const char* SkyrimSystem::ownerName() const
++	{
++		if (const auto owner = m_skeleton->GetUserData(); owner && owner->GetName()[0]) {
++			return owner->GetName();
++		}
++		return m_skeleton->parent ? m_skeleton->parent->name.c_str() : m_skeleton->name.c_str();
++	}
++
++	float SkyrimSystem::absorbDiscontinuity(float timeStep)
++	{
++		using Action = DiscontinuityGuard::Action;
++
++		const auto finding = GetDiscontinuityGuard(this).inspect(m_bones, rootTransform(), timeStep, GetDiscontinuitySettings());
++		if (finding.released) {
++			logger::debug("physics on {} ({} bones) released after {:.2f} s at rest (pose at {:.0f} units/s)", ownerName(), m_bones.size(), finding.heldFor, finding.poseSpeed);
++		}
++		if (finding.action == Action::kNone) {
++			return timeStep;
++		}
++
++		if (finding.action != Action::kHold) {
++			logger::debug(
++				"discontinuity on {} ({} bones): {} (step {:.1f} ms, root {:.0f} units/s, {:.0f} deg/s, pose {:.0f} units/s, {} of {} animated bones snapped)",
++				ownerName(),
++				m_bones.size(),
++				finding.action == Action::kRestart ? "restarted" : "carried",
++				timeStep * 1000.0f,
++				finding.rootSpeed,
++				finding.turnSpeed,
++				finding.poseSpeed,
++				finding.snappedBones,
++				finding.animatedBones);
++		}
++
++		m_lastRootRotation = convertNi(m_skeleton->world.rotate);
++		if (finding.action == Action::kCarried) {
++			return timeStep;
++		}
++
++		updateTransformUpDown(m_skeleton.get(), true);
++		return RESET_PHYSICS;
++	}
++
+ 	SkyrimSystemCreator::SkyrimSystemCreator()
+ 	{
+ 	}
+diff --git a/src/hdtSkyrimSystem.h b/src/hdtSkyrimSystem.h
+index 89aeab8..d9dbdea 100644
+--- a/src/hdtSkyrimSystem.h
++++ b/src/hdtSkyrimSystem.h
+@@ -3,6 +3,7 @@
+ 
+ #include "hdtConvertNi.h"
+ #include "hdtDefaultBBP.h"
++#include "hdtDiscontinuityGuard.h"
+ #include "hdtSkinnedMesh/hdtConeTwistConstraint.h"
+ #include "hdtSkinnedMesh/hdtGeneric6DofConstraint.h"
+ #include "hdtSkinnedMesh/hdtSkinnedMeshSystem.h"
+@@ -42,6 +43,12 @@ namespace hdt
+ 
+ 		// angular velocity damper
+ 		btQuaternion m_lastRootRotation;
++
++	private:
++		btTransform rootTransform() const;
++		const char* ownerName() const;
++		float absorbDiscontinuity(float timeStep);
++
+ 	};
+ 
+ 	class XMLReader;
+diff --git a/src/main.cpp b/src/main.cpp
+index 5db1aa9..f74dfd9 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -758,6 +758,11 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
+ 	//
+ 	Events::Sources::FrameSyncEventSource::GetSingleton()->AddEventSink(hdt::SkyrimPhysicsWorld::get());
+ 
++	// Sinks run in registration order: registering any earlier would run plugin FrameSync listeners before SMP
++	// has written its own bone transforms.
++	Events::Sources::FrameEventSource::GetSingleton()->AddEventSink(&hdt::g_pluginInterface);
++	Events::Sources::FrameSyncEventSource::GetSingleton()->AddEventSink(&hdt::g_pluginInterface);
++
+ 	//
+ 	Events::Sources::ShutdownEventEventSource::GetSingleton()->AddEventSink(hdt::ActorManager::instance());
+ 	Events::Sources::ShutdownEventEventSource::GetSingleton()->AddEventSink(hdt::SkyrimPhysicsWorld::get());
+diff --git a/tests/config/test_globalconfig.cpp b/tests/config/test_globalconfig.cpp
+index 11f8628..69c6357 100644
+--- a/tests/config/test_globalconfig.cpp
++++ b/tests/config/test_globalconfig.cpp
+@@ -28,6 +28,12 @@ TEST_CASE("round-trip: serialize then parse is identity for a clamped config")
+ 	c.disableSMPHairWhenWigEquipped = true;
+ 	c.hideSMPHairWhenInvisible = true;  // defaults to false, so flip it to exercise the round-trip
+ 	c.useRealTime = true;
++	c.guardDiscontinuities = false;  // defaults to true
++	c.teleportSpeedLimit = 900.0f;
++	c.teleportTurnLimit = 720.0f;
++	c.poseSnapSpeedLimit = 2500.0f;
++	c.settleSpeedLimit = 60.0f;
++	c.settleTimeLimit = 0.75f;
+ 	c.maximumActiveSkeletons = 42;
+ 	c.budgetMs = 7.5f;
+ 	c.erp = 0.33f;
+diff --git a/tests/owner/CMakeLists.txt b/tests/owner/CMakeLists.txt
+new file mode 100644
+index 0000000..6216e15
+--- /dev/null
++++ b/tests/owner/CMakeLists.txt
+@@ -0,0 +1,26 @@
++# owner_tests - doctest unit suite for the external mesh owner registry.
++#
++# Built only when BUILD_OWNER_TESTS is ON (a dev/CI tool, never packaged). ExternalOwner is pure STL plus the
++# dependency-light PluginOwnerAPI.h, so this target links only doctest - no CommonLibSSE, Bullet, or TBB - and it
++# compiles the engine source directly without the game's force-included src/PCH.h. Mirrors tests/config.
++
++set(ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../..")
++set(SOURCE_DIR "${ROOT_DIR}/src")
++
++find_package(doctest CONFIG REQUIRED)
++
++add_executable(
++	owner_tests "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test_owner.cpp"
++				"${SOURCE_DIR}/ExternalOwner.cpp" "${SOURCE_DIR}/ExternalOwner.h" "${SOURCE_DIR}/PluginOwnerAPI.h")
++
++target_compile_features(owner_tests PRIVATE cxx_std_20)
++target_include_directories(owner_tests PRIVATE "${SOURCE_DIR}")
++
++if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
++	target_compile_options(owner_tests PRIVATE "/EHsc" "/permissive-" "/bigobj" "/utf-8")
++endif()
++
++target_link_libraries(owner_tests PRIVATE doctest::doctest)
++
++# CTest entry: running the exe with no args runs the whole doctest suite and exits non-zero on failure.
++add_test(NAME owner_tests COMMAND owner_tests)
+diff --git a/tests/owner/main.cpp b/tests/owner/main.cpp
+new file mode 100644
+index 0000000..324e941
+--- /dev/null
++++ b/tests/owner/main.cpp
+@@ -0,0 +1,6 @@
++// Test runner for the external mesh owner registry (src/ExternalOwner.cpp). Running the executable with no
++// arguments runs the whole doctest suite and exits non-zero on any failure (so CTest / CI can gate on it).
++// ExternalOwner is pure STL plus the dependency-light PluginOwnerAPI.h, so this target links neither
++// CommonLibSSE, Bullet, nor TBB.
++#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
++#include <doctest/doctest.h>
+diff --git a/tests/owner/test_owner.cpp b/tests/owner/test_owner.cpp
+new file mode 100644
+index 0000000..0b7f761
+--- /dev/null
++++ b/tests/owner/test_owner.cpp
+@@ -0,0 +1,492 @@
++#include <doctest/doctest.h>
++
++#include "ExternalOwner.h"
++
++#include <algorithm>
++#include <cstdint>
++#include <functional>
++#include <memory>
++#include <vector>
++
++namespace
++{
++	class FakeContext : public hdt::IMeshClaimContext
++	{
++	public:
++		FakeContext() = default;
++		explicit FakeContext(const int* a_model) :
++			model(a_model)
++		{}
++
++		hdt::MeshKind getKind() const override { return hdt::MeshKind::Armor; }
++		const char* getPhysicsFile() const override { return "test.xml"; }
++		RE::Actor* getActor() const override { return nullptr; }
++		RE::NiNode* getSkeleton() const override { return nullptr; }
++		RE::NiAVObject* getModel() const override { return reinterpret_cast<RE::NiAVObject*>(const_cast<int*>(model)); }
++		const char* getMergedBoneName(const char*) const override { return nullptr; }
++
++		const int* model = nullptr;
++	};
++
++	class FakeOwner : public hdt::IMeshOwner
++	{
++	public:
++		explicit FakeOwner(bool a_claims) :
++			claims(a_claims)
++		{}
++
++		bool claim(const hdt::IMeshClaimContext&, std::uint64_t a_token) override
++		{
++			++claimCalls;
++			lastClaimToken = a_token;
++
++			if (claims && onClaim) {
++				onClaim();
++			}
++
++			return claims;
++		}
++
++		void release(std::uint64_t a_token) override
++		{
++			++releaseCalls;
++			lastReleaseToken = a_token;
++		}
++
++		bool claims = false;
++		int claimCalls = 0;
++		int releaseCalls = 0;
++		std::uint64_t lastClaimToken = 0;
++		std::uint64_t lastReleaseToken = 0;
++		std::function<void()> onClaim;
++	};
++
++	// Unregisters on scope exit so a failing CHECK cannot leak a registration into the next case.
++	class OwnerScope
++	{
++	public:
++		~OwnerScope()
++		{
++			auto& registry = hdt::ExternalOwnerRegistry::instance();
++			for (const auto& owner : m_owners) {
++				registry.removeOwner(owner.get());
++			}
++		}
++
++		FakeOwner& create(bool a_claims)
++		{
++			m_owners.push_back(std::make_unique<FakeOwner>(a_claims));
++			return *m_owners.back();
++		}
++
++		FakeOwner& add(bool a_claims, hdt::MeshOwnerInfo a_info = {})
++		{
++			FakeOwner& owner = create(a_claims);
++			hdt::ExternalOwnerRegistry::instance().addOwner(&owner, a_info);
++			return owner;
++		}
++
++	private:
++		std::vector<std::unique_ptr<FakeOwner>> m_owners;
++	};
++}
++
++TEST_CASE("no owners registered gives an inactive claim")
++{
++	OwnerScope scope;
++
++	const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++	CHECK_FALSE(claim.active());
++	CHECK(claim.token() == 0);
++}
++
++TEST_CASE("add ignores null and duplicate owners")
++{
++	OwnerScope scope;
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	registry.addOwner(nullptr);
++	CHECK_FALSE(registry.tryClaim(FakeContext()).active());
++
++	FakeOwner& owner = scope.add(true);
++	registry.addOwner(&owner);
++	registry.addOwner(&owner);
++
++	const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++	CHECK(claim.active());
++	CHECK(owner.claimCalls == 1);
++}
++
++TEST_CASE("the first owner in registration order that claims wins")
++{
++	OwnerScope scope;
++	FakeOwner& first = scope.add(true);
++	FakeOwner& second = scope.add(true);
++
++	const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++	CHECK(claim.active());
++	CHECK(first.claimCalls == 1);
++	CHECK(second.claimCalls == 0);
++}
++
++TEST_CASE("an owner that declines is skipped and the next one is asked")
++{
++	OwnerScope scope;
++	FakeOwner& declining = scope.add(false);
++	FakeOwner& accepting = scope.add(true);
++
++	const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++	CHECK(claim.active());
++	CHECK(declining.claimCalls == 1);
++	CHECK(accepting.claimCalls == 1);
++}
++
++TEST_CASE("a claim releases its owner exactly once")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true);
++
++	SUBCASE("on destruction")
++	{
++		{
++			const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++			CHECK(claim.active());
++			CHECK(owner.releaseCalls == 0);
++		}
++
++		CHECK(owner.releaseCalls == 1);
++	}
++
++	SUBCASE("on reset")
++	{
++		{
++			hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++			REQUIRE(claim.active());
++
++			claim.reset();
++			CHECK_FALSE(claim.active());
++			CHECK(owner.releaseCalls == 1);
++
++			claim.reset();
++			CHECK(owner.releaseCalls == 1);
++		}
++
++		CHECK(owner.releaseCalls == 1);
++	}
++
++	SUBCASE("on move-assignment over an active claim")
++	{
++		{
++			hdt::ExternalClaim first = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++			hdt::ExternalClaim second = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++			REQUIRE(first.active());
++			REQUIRE(second.active());
++
++			first = std::move(second);
++			CHECK(owner.releaseCalls == 1);
++			CHECK(first.active());
++			CHECK_FALSE(second.active());
++		}
++
++		CHECK(owner.releaseCalls == 2);
++	}
++}
++
++TEST_CASE("a moved-from claim does not release")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true);
++
++	{
++		hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++		REQUIRE(claim.active());
++
++		hdt::ExternalClaim moved = std::move(claim);
++		CHECK_FALSE(claim.active());
++		CHECK(claim.token() == 0);
++		CHECK(moved.active());
++	}
++
++	CHECK(owner.releaseCalls == 1);
++}
++
++TEST_CASE("release is not delivered to an owner that was removed after claiming")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true);
++
++	{
++		hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++		REQUIRE(claim.active());
++
++		hdt::ExternalOwnerRegistry::instance().removeOwner(&owner);
++	}
++
++	CHECK(owner.releaseCalls == 0);
++}
++
++TEST_CASE("an owner may register an owner from inside claim")
++{
++	OwnerScope scope;
++	FakeOwner& added = scope.create(true);
++	FakeOwner& registering = scope.add(true);
++	registering.onClaim = [&] { hdt::ExternalOwnerRegistry::instance().addOwner(&added); };
++
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	{
++		const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++		CHECK(claim.active());
++		CHECK(registering.claimCalls == 1);
++		CHECK(added.claimCalls == 0);
++	}
++
++	registry.removeOwner(&registering);
++
++	{
++		const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++		CHECK(claim.active());
++		CHECK(added.claimCalls == 1);
++	}
++}
++
++TEST_CASE("an owner may unregister an owner from inside claim")
++{
++	OwnerScope scope;
++	FakeOwner& removing = scope.add(true);
++	FakeOwner& victim = scope.add(true);
++	removing.onClaim = [&] { hdt::ExternalOwnerRegistry::instance().removeOwner(&victim); };
++
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	{
++		const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++		CHECK(claim.active());
++		CHECK(removing.claimCalls == 1);
++		CHECK(victim.claimCalls == 0);
++	}
++
++	{
++		const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++		CHECK(claim.active());
++		CHECK(victim.claimCalls == 0);
++	}
++}
++
++TEST_CASE("an owner removed by an earlier owner that declines is not asked")
++{
++	OwnerScope scope;
++	FakeOwner& victim = scope.create(true);
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	struct Remover : hdt::IMeshOwner
++	{
++		bool claim(const hdt::IMeshClaimContext&, std::uint64_t) override
++		{
++			hdt::ExternalOwnerRegistry::instance().removeOwner(victim);
++			return false;
++		}
++
++		void release(std::uint64_t) override {}
++		hdt::IMeshOwner* victim = nullptr;
++	} remover;
++	remover.victim = &victim;
++	registry.addOwner(&remover);
++	registry.addOwner(&victim);
++
++	CHECK_FALSE(registry.tryClaim(FakeContext()).active());
++	CHECK(victim.claimCalls == 0);
++	registry.removeOwner(&remover);
++}
++
++TEST_CASE("an owner that unregisters itself inside claim and accepts does not win")
++{
++	OwnerScope scope;
++	FakeOwner& leaving = scope.add(true);
++	FakeOwner& next = scope.add(true);
++	leaving.onClaim = [&] { hdt::ExternalOwnerRegistry::instance().removeOwner(&leaving); };
++
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++	const hdt::ExternalClaim claim = registry.tryClaim(FakeContext());
++	CHECK(claim.active());
++	CHECK(next.claimCalls == 1);
++	CHECK(leaving.releaseCalls == 0);
++}
++
++TEST_CASE("tokens are unique and nonzero across claims")
++{
++	OwnerScope scope;
++	scope.add(true);
++
++	std::vector<std::uint64_t> tokens;
++	for (int i = 0; i < 8; ++i) {
++		const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++		REQUIRE(claim.active());
++		CHECK(claim.token() != 0);
++		tokens.push_back(claim.token());
++	}
++
++	std::sort(tokens.begin(), tokens.end());
++	CHECK(std::adjacent_find(tokens.begin(), tokens.end()) == tokens.end());
++}
++
++TEST_CASE("the token passed to claim equals the token passed to the matching release")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true);
++
++	{
++		const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++		REQUIRE(claim.active());
++		CHECK(owner.lastClaimToken == claim.token());
++	}
++
++	CHECK(owner.releaseCalls == 1);
++	CHECK(owner.lastReleaseToken == owner.lastClaimToken);
++}
++
++TEST_CASE("a higher priority owner is asked before earlier registered ones")
++{
++	OwnerScope scope;
++	FakeOwner& low = scope.add(true, { "low", 0 });
++	FakeOwner& high = scope.add(true, { "high", 10 });
++
++	const hdt::ExternalClaim claim = hdt::ExternalOwnerRegistry::instance().tryClaim(FakeContext());
++	CHECK(claim.active());
++	CHECK(claim.ownerName() == "high");
++	CHECK(high.claimCalls == 1);
++	CHECK(low.claimCalls == 0);
++}
++
++TEST_CASE("equal priorities keep registration order and an empty name becomes unnamed")
++{
++	OwnerScope scope;
++	scope.add(false, { "a", 5 });
++	scope.add(false, { "b", 5 });
++	scope.add(false, { nullptr, 5 });
++
++	const auto names = hdt::ExternalOwnerRegistry::instance().ownerNames();
++	REQUIRE(names.size() == 3);
++	CHECK(names[0] == "a");
++	CHECK(names[1] == "b");
++	CHECK(names[2] == "unnamed");
++}
++
++TEST_CASE("relinquish ends the claim without a release call and skips the owner during the queued reload")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true, { "gpu", 0 });
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	{
++		hdt::ExternalClaim claim = registry.tryClaim(FakeContext(), 0x14);
++		REQUIRE(claim.active());
++
++		const auto relinquished = registry.relinquish(&owner, claim.token());
++		REQUIRE(relinquished.has_value());
++		CHECK(relinquished->actorFormId == 0x14);
++		CHECK_FALSE(registry.relinquish(&owner, claim.token()).has_value());
++	}
++
++	CHECK(owner.releaseCalls == 0);
++
++	registry.beginRelinquishedReload(0x14);
++	const int before = owner.claimCalls;
++	CHECK_FALSE(registry.tryClaim(FakeContext(), 0x14).active());
++	CHECK(owner.claimCalls == before);
++	registry.endRelinquishedReload(0x14);
++
++	CHECK(registry.tryClaim(FakeContext(), 0x14).active());
++}
++
++TEST_CASE("an unrelated reload before the queued one does not use up the skip")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true, { "gpu", 0 });
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	hdt::ExternalClaim first = registry.tryClaim(FakeContext(), 0x14);
++	REQUIRE(first.active());
++	REQUIRE(registry.relinquish(&owner, first.token()).has_value());
++
++	const hdt::ExternalClaim early = registry.tryClaim(FakeContext(), 0x14);
++	CHECK(early.active());
++
++	registry.beginRelinquishedReload(0x14);
++	CHECK_FALSE(registry.tryClaim(FakeContext(), 0x14).active());
++	registry.endRelinquishedReload(0x14);
++}
++
++TEST_CASE("the skip covers only the relinquished mesh when an actor wears two with one physics file")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.add(true, { "gpu", 0 });
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++	const int bodyModel = 0;
++	const int cloakModel = 0;
++
++	hdt::ExternalClaim body = registry.tryClaim(FakeContext(&bodyModel), 0x14);
++	hdt::ExternalClaim cloak = registry.tryClaim(FakeContext(&cloakModel), 0x14);
++	REQUIRE(body.active());
++	REQUIRE(cloak.active());
++	REQUIRE(registry.relinquish(&owner, cloak.token()).has_value());
++
++	registry.beginRelinquishedReload(0x14);
++	CHECK(registry.tryClaim(FakeContext(&bodyModel), 0x14).active());
++	CHECK_FALSE(registry.tryClaim(FakeContext(&cloakModel), 0x14).active());
++	registry.endRelinquishedReload(0x14);
++}
++
++TEST_CASE("the skip after a relinquish covers only that actor and the lower priority owner still claims")
++{
++	OwnerScope scope;
++	FakeOwner& high = scope.add(true, { "high", 10 });
++	FakeOwner& low = scope.add(true, { "low", 0 });
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	hdt::ExternalClaim first = registry.tryClaim(FakeContext(), 0x14);
++	REQUIRE(first.active());
++	REQUIRE(registry.relinquish(&high, first.token()).has_value());
++
++	registry.beginRelinquishedReload(0x14);
++	const hdt::ExternalClaim next = registry.tryClaim(FakeContext(), 0x14);
++	CHECK(next.ownerName() == "low");
++	registry.endRelinquishedReload(0x14);
++	const hdt::ExternalClaim other = registry.tryClaim(FakeContext(), 0x15);
++	CHECK(other.ownerName() == "high");
++	CHECK(low.claimCalls == 1);
++}
++
++TEST_CASE("relinquish is refused for the wrong owner or an unknown token")
++{
++	OwnerScope scope;
++	FakeOwner& a = scope.add(true);
++	FakeOwner& b = scope.add(false);
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++
++	const hdt::ExternalClaim claim = registry.tryClaim(FakeContext(), 0x14);
++	REQUIRE(claim.active());
++	CHECK_FALSE(registry.relinquish(&b, claim.token()).has_value());
++	CHECK_FALSE(registry.relinquish(&a, claim.token() + 1000).has_value());
++}
++
++TEST_CASE("removing an owner ends its live claims and pending skips")
++{
++	OwnerScope scope;
++	FakeOwner& owner = scope.create(true);
++	auto& registry = hdt::ExternalOwnerRegistry::instance();
++	registry.addOwner(&owner, { "gpu", 0 });
++
++	{
++		hdt::ExternalClaim claim = registry.tryClaim(FakeContext(), 0x14);
++		REQUIRE(claim.active());
++		registry.removeOwner(&owner);
++		claim.reset();
++	}
++
++	CHECK(owner.releaseCalls == 0);
++	CHECK(registry.ownerNames().empty());
++
++	registry.addOwner(&owner, { "gpu", 0 });
++	CHECK(registry.tryClaim(FakeContext(), 0x14).active());
++}
