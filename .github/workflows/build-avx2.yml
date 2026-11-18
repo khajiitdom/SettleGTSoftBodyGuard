@@ -15,13 +15,13 @@ jobs:
       - name: Checkout this repo (bridge_core + patch)
         uses: actions/checkout@v4
 
-      - name: Clone Settle-hdtSMP64 (FSMP 4.1.1 + Settle) pinned to ab97519
+      - name: Clone Settle-hdtSMP64 (FSMP 4.1.1 + Settle) pinned to b9364b8
         shell: bash
         run: |
           git config --global core.autocrlf false
           git clone https://github.com/Flob26/Settle-hdtSMP64.git hdtSMP64
           cd hdtSMP64
-          git checkout ab9751927b91a845e858e1870dc75068a16f6ce5
+          git checkout b9364b80257786d2077598ee6eb81af9c8c4ff17
           git submodule update --init --recursive --depth 1 || git submodule update --init --recursive
 
       - name: Apply combined patch (GTSoftBody bridge + Discontinuity Guard + owner API PR479/480, layout-safe)

@@ -1,6 +1,6 @@
 # hdtSMP64 = Settle + GTSoftBody bridge + Discontinuity Guard + GPUSMP owner API, AVX2 + PDB
 
-Base   : https://github.com/Flob26/Settle-hdtSMP64 @ ab97519 (= FSMP v4.1.1 + Settle)
+Base   : https://github.com/Flob26/Settle-hdtSMP64 @ b9364b8 (= FSMP v4.1.1 + Settle, horse support)
 Patch  : patch/settle_bridge_guard_layoutsafe.patch =
   - bridge GTSoftBody
   - FSMP-Discontinuity-Guard (YoucefNabil), state dipindah KELUAR dari SkyrimSystem/SkyrimPhysicsWorld
